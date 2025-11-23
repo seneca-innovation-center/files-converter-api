@@ -1,33 +1,36 @@
 {
-  "name": "nestjs-template",
+  "name": "files-converter-api",
   "version": "1.0.0",
-  "description": "A production-ready NestJS template with Fastify, MongoDB, authentication, email support, and comprehensive security features",
+  "description": "A production-ready NestJS backend API for file conversion. Supports image format conversion with AI background removal, 3D model conversion and optimization, and general file format conversion.",
   "author": "mohamed boukari",
   "private": false,
   "license": "MIT",
   "keywords": [
     "nestjs",
-    "template",
-    "starter",
-    "boilerplate",
+    "file-conversion",
+    "image-processing",
+    "3d-models",
+    "gltf",
+    "glb",
+    "sharp",
+    "background-removal",
     "fastify",
-    "mongodb",
     "typescript",
-    "authentication",
+    "api",
     "swagger",
-    "docker",
+    "openapi",
+    "rate-limiting",
     "production-ready"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/1devspace/nestjs-template.git"
+    "url": "https://github.com/mohamedboukari/files-converter-api.git"
   },
   "bugs": {
-    "url": "https://github.com/1devspace/nestjs-template/issues"
+    "url": "https://github.com/mohamedboukari/files-converter-api/issues"
   },
-  "homepage": "https://github.com/1devspace/nestjs-template#readme",
+  "homepage": "https://github.com/mohamedboukari/files-converter-api#readme",
   "scripts": {
-    "setup": "node scripts/setup.js",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/main --watch",
@@ -48,6 +51,10 @@
     "@fastify/helmet": "^13.0.2",
     "@fastify/multipart": "^9.3.0",
     "@fastify/static": "^8.3.0",
+    "@gltf-transform/core": "^4.2.1",
+    "@gltf-transform/extensions": "^4.2.1",
+    "@gltf-transform/functions": "^4.2.1",
+    "@imgly/background-removal-node": "^1.4.5",
     "@nestjs-modules/mailer": "^2.0.2",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
@@ -58,12 +65,16 @@
     "@nestjs/platform-socket.io": "^11.1.9",
     "@nestjs/schedule": "^6.0.1",
     "@nestjs/swagger": "^11.2.3",
+    "@nestjs/throttler": "^6.4.0",
+    "canvas": "^3.2.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "dotenv": "^17.2.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "socket.io": "^4.8.1"
+    "sharp": "^0.34.5",
+    "socket.io": "^4.8.1",
+    "three": "^0.181.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

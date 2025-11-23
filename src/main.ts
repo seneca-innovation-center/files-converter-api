@@ -81,7 +81,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({
-      bodyLimit: 5 * 1024 * 1024, // Set maximum request body size to 5MB
+      bodyLimit: 200 * 1024 * 1024, // Set maximum request body size to 200MB for file uploads
     }),
     {
       rawBody: true, // Enable raw body for webhook signatures and similar use cases
@@ -99,7 +99,8 @@ async function bootstrap(): Promise<void> {
   // Register multipart/form-data support for file uploads
   await app.register(fastifyMultipart, {
     limits: {
-      fieldSize: 5 * 1024 * 1024, // Maximum field size of 5MB for file uploads
+      fieldSize: 200 * 1024 * 1024, // Maximum field size of 200MB for file uploads
+      fileSize: 200 * 1024 * 1024, // Maximum file size of 200MB
     },
   });
 

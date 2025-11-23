@@ -2,11 +2,18 @@ import { join } from 'path';
 
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
+import { APP_GUARD } from '@nestjs/core';
+// import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+
 import { AppController } from './app.controller';
+import { ThreeDModule } from './modules/3d/3d.module';
+import { FilesModule } from './modules/files/files.module';
+import { ImagesModule } from './modules/images/images.module';
+import { TempFileCleanupService } from './utils/temp-file-cleanup.service';
 
 @Module({
   imports: [
@@ -14,8 +21,15 @@ import { AppController } from './app.controller';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    // Task scheduling module for cron jobs and intervals (remove this module if scheduled tasks are not needed)
+    // Task scheduling module for cron jobs and intervals (used for temp file cleanup)
     ScheduleModule.forRoot(),
+    // Rate limiting configuration
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // Time window in milliseconds (1 minute)
+        limit: 10, // Maximum number of requests per time window
+      },
+    ]),
     // MongoDB connection using URI from environment variables (remove this module if database is not needed)
 
     /* MongooseModule.forRootAsync({
@@ -54,8 +68,20 @@ import { AppController } from './app.controller';
         },
       }),
     }),
+    // File conversion modules
+    ImagesModule,
+    ThreeDModule,
+    FilesModule,
   ],
   controllers: [AppController],
-  providers: [],
+  providers: [
+    // Apply rate limiting globally
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+    // Temporary file cleanup service
+    TempFileCleanupService,
+  ],
 })
 export class AppModule {}
