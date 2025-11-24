@@ -42,7 +42,7 @@ export class SocketAdapter extends IoAdapter {
     // Parse comma-separated list of allowed origins from environment variable
     const origins = process.env.BASE_URL
       ? process.env.BASE_URL.split(',').map((url) => url.trim())
-      : [];
+      : ['https://files-converter-seven.vercel.app'];
 
     return super.createIOServer(port, {
       ...options,
@@ -92,7 +92,7 @@ async function bootstrap(): Promise<void> {
   // Parse multiple URLs from BASE_URL environment variable for CORS configuration
   const origins = process.env.BASE_URL
     ? process.env.BASE_URL.split(',').map((url) => url.trim())
-    : [];
+    : ['https://files-converter-seven.vercel.app'];
 
   // === Fastify Plugin Registration ===
 
