@@ -213,10 +213,7 @@ export class FilesService {
     const options = { format: 'A4' };
 
     try {
-      const pdfBuffer = (await htmlPdf.generatePdf(
-        file,
-        options,
-      )) as unknown as Buffer;
+      const pdfBuffer = htmlPdf.generatePdf(file, options) as unknown as Buffer;
       if (!pdfBuffer) {
         throw new Error('PDF generation returned empty buffer');
       }

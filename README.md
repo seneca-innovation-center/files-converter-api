@@ -6,6 +6,12 @@ A production-ready, open-source NestJS backend for file conversion web applicati
 
 - **Image Conversion**: Convert images between formats (JPEG, PNG, WebP, AVIF, TIFF, BMP, SVG) with optional resizing, AI background removal, and SVG vectorization
 - **Document Conversion**: Convert documents between DOCX, PDF, TXT, HTML, XLSX, and CSV formats
+- **Video & Audio Conversion**: Convert video/audio files between MP4, WebM, AVI, MOV, MP3, WAV, OGG, FLAC, and more with FFmpeg
+- **QR Codes & Barcodes**: Generate QR codes and barcodes (CODE128, EAN13, UPC, etc.) with customizable colors and sizes
+- **Archive Management**: Create and extract ZIP, TAR, and TAR.GZ archives
+- **Markdown Conversion**: Convert Markdown to HTML or PDF, and HTML to Markdown
+- **OCR Text Extraction**: Extract text from images using Tesseract OCR in multiple languages
+- **Code Formatting**: Format and syntax-highlight code files (JavaScript, Python, Java, etc.)
 - **3D Model Conversion**: Convert 3D models (GLB/GLTF) with optimization and compression support
 - **Rate Limiting**: Built-in rate limiting to prevent abuse
 - **Automatic Cleanup**: Temporary files are automatically cleaned up after 15 minutes
@@ -18,6 +24,12 @@ A production-ready, open-source NestJS backend for file conversion web applicati
 - **Language**: TypeScript
 - **Image Processing**: Sharp, @imgly/background-removal-node, potrace (SVG tracing)
 - **Document Processing**: mammoth (DOCX), pdf-parse v2 (PDF extraction), pdf-lib, pdfkit (PDF generation), xlsx (Excel), html-pdf-node, docx (DOCX generation)
+- **Media Processing**: fluent-ffmpeg, @ffmpeg-installer/ffmpeg
+- **QR & Barcode**: qrcode, jsbarcode, canvas
+- **Archives**: archiver, unzipper, tar-stream
+- **Markdown**: marked, turndown
+- **OCR**: tesseract.js
+- **Code**: prettier, highlight.js
 - **3D Processing**: @gltf-transform/core, @gltf-transform/functions
 - **Validation**: class-validator, class-transformer
 - **Rate Limiting**: @nestjs/throttler
@@ -149,6 +161,161 @@ Convert documents between various formats with actual content conversion (not ju
 
 **Note**: PDF to DOCX conversion extracts text and recreates document structure. Complex layouts, images, and tables may not be perfectly preserved.
 
+### Video & Audio Conversion
+
+**POST** `/api/media/convert`
+
+Convert video and audio files between formats with optional quality and resolution settings.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Media file (max 200MB)
+- `targetFormat` (required): Target format (mp4, webm, avi, mov, mp3, wav, ogg, flac, etc.)
+- `videoCodec` (optional): Video codec (e.g., libx264, libx265)
+- `audioCodec` (optional): Audio codec (e.g., aac, libmp3lame)
+- `audioBitrate` (optional): Audio bitrate (e.g., 192k, 320k)
+- `videoBitrate` (optional): Video bitrate (e.g., 1000k, 2000k)
+- `width` (optional): Output width in pixels
+- `height` (optional): Output height in pixels
+
+**Supported Conversions**:
+
+- **Video**: MP4, WebM, AVI, MOV, MKV, GIF
+- **Audio**: MP3, WAV, OGG, FLAC, AAC, M4A
+- **Video to Audio**: Extract audio from any video
+
+**POST** `/api/media/extract-audio`
+
+Extract audio track from a video file.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Video file
+- `format` (required): Audio format (mp3, wav, aac, flac)
+
+**Response**: Extracted audio file as download
+
+### QR Codes & Barcodes
+
+**POST** `/api/qr/generate`
+
+Generate a QR code from text or URL.
+
+**Request**: `application/json`
+
+- `data` (required): Text or URL to encode
+- `size` (optional): Size in pixels (100-2000, default: 300)
+- `color` (optional): Foreground color (hex, default: #000000)
+- `backgroundColor` (optional): Background color (hex, default: #FFFFFF)
+- `errorCorrectionLevel` (optional): Error correction level (L, M, Q, H)
+
+**Response**: PNG image file
+
+**POST** `/api/qr/barcode`
+
+Generate a barcode in various formats.
+
+**Request**: `application/json`
+
+- `data` (required): Data to encode
+- `format` (required): Barcode format (CODE128, EAN13, EAN8, UPC, CODE39, ITF14, MSI, pharmacode)
+- `width` (optional): Width in pixels (100-1000, default: 200)
+- `height` (optional): Height in pixels (50-500, default: 100)
+- `displayValue` (optional): Show text below barcode (boolean, default: true)
+
+**Response**: PNG image file
+
+### Archives
+
+**POST** `/api/archives/create`
+
+Create an archive from multiple files.
+
+**Request**: `multipart/form-data`
+
+- `files` (required): Multiple files to archive
+- `format` (required): Archive format (zip, tar, tar.gz)
+- `compressionLevel` (optional): Compression level 0-9 (ZIP only, default: 6)
+
+**Response**: Archive file (ZIP, TAR, or TAR.GZ)
+
+**POST** `/api/archives/extract`
+
+Extract files from an archive.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Archive file (ZIP, TAR, or TAR.GZ)
+
+**Response**: JSON with extracted file information and base64-encoded contents
+
+### Markdown Conversion
+
+**POST** `/api/markdown/convert`
+
+Convert Markdown to HTML or PDF.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Markdown file (.md)
+- `targetFormat` (required): Target format (html, pdf)
+
+**Response**: Converted file as download
+
+**POST** `/api/markdown/html-to-markdown`
+
+Convert HTML to Markdown.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): HTML file
+
+**Response**: Markdown file as download
+
+### OCR Text Extraction
+
+**POST** `/api/ocr/extract`
+
+Extract text from images using OCR (Optical Character Recognition).
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Image file (PNG, JPG, etc.)
+- `language` (optional): OCR language (eng, fra, deu, spa, ita, por, rus, chi_sim, jpn, kor, ara)
+- `outputFormat` (optional): Output format (txt, json)
+
+**Supported Languages**:
+
+- English (eng), French (fra), German (deu), Spanish (spa)
+- Italian (ita), Portuguese (por), Russian (rus)
+- Chinese Simplified (chi_sim), Japanese (jpn), Korean (kor), Arabic (ara)
+
+**Response**: Extracted text as TXT or JSON file
+
+### Code Formatting
+
+**POST** `/api/code/format`
+
+Format and/or syntax-highlight code files.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Code file
+- `language` (optional): Programming language (javascript, typescript, python, java, html, css, json, etc.)
+- `outputFormat` (optional): Output format (formatted, html)
+
+**Supported Languages**:
+
+- JavaScript, TypeScript, Python, Java, C#, C++, Go, Rust
+- PHP, Ruby, HTML, CSS, JSON, SQL
+
+**Output Formats**:
+
+- `formatted`: Prettified code (using Prettier)
+- `html`: Syntax-highlighted HTML page
+
+**Response**: Formatted code file or HTML page
+
 ## Rate Limiting
 
 The API has rate limiting enabled:
@@ -242,6 +409,52 @@ curl -X POST http://localhost:3001/api/images/convert \
   -F "width=800" \
   -F "removeBackground=true" \
   --output photo-nobg.png
+```
+
+### Convert Video to MP4
+
+```bash
+curl -X POST http://localhost:3001/api/media/convert \
+  -F "file=@video.avi" \
+  -F "targetFormat=mp4" \
+  -F "videoCodec=libx264" \
+  --output video.mp4
+```
+
+### Extract Audio from Video
+
+```bash
+curl -X POST http://localhost:3001/api/media/extract-audio \
+  -F "file=@video.mp4" \
+  -F "format=mp3" \
+  --output audio.mp3
+```
+
+### Generate QR Code
+
+```bash
+curl -X POST http://localhost:3001/api/qr/generate \
+  -H "Content-Type: application/json" \
+  -d '{"data":"https://example.com","size":400}' \
+  --output qrcode.png
+```
+
+### Convert Markdown to PDF
+
+```bash
+curl -X POST http://localhost:3001/api/markdown/convert \
+  -F "file=@README.md" \
+  -F "targetFormat=pdf" \
+  --output readme.pdf
+```
+
+### Extract Text with OCR
+
+```bash
+curl -X POST http://localhost:3001/api/ocr/extract \
+  -F "file=@document.jpg" \
+  -F "language=eng" \
+  --output extracted.txt
 ```
 
 ## License
