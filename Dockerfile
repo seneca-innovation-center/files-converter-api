@@ -1,23 +1,23 @@
-# -------- 1. Builder Stage --------
-FROM node:22-alpine AS builder
+FROM node:22-slim
+
+# Install canvas dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg-dev \
+    libgif-dev \
+    librsvg2-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+
+RUN npm install --omit=dev
 
 COPY . .
-RUN npm run build
 
-# -------- 2. Production Stage --------
-FROM node:22-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm install --production
-
-COPY --from=builder /app/dist ./dist
-
-EXPOSE 3001
-CMD ["node", "dist/main.js"]
+CMD ["npm", "start"]
