@@ -90,9 +90,9 @@ async function bootstrap(): Promise<void> {
   );
 
   // Parse multiple URLs from BASE_URL environment variable for CORS configuration
-  const origins = process.env.BASE_URL
-    ? process.env.BASE_URL.split(',').map((url) => url.trim())
-    : ['https://files-converter-seven.vercel.app'];
+  // const origins = process.env.BASE_URL
+  //   ? process.env.BASE_URL.split(',').map((url) => url.trim())
+  //   : ['https://files-converter-seven.vercel.app'];
 
   // === Fastify Plugin Registration ===
 
@@ -106,7 +106,7 @@ async function bootstrap(): Promise<void> {
 
   // Configure CORS (Cross-Origin Resource Sharing) to allow requests from specified origins
   await app.register(fastifyCors, {
-    origin: origins, // Allowed origins from environment variable
+    origin: '*', // Allowed origins from environment variable
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], // Allowed HTTP methods
     allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control'], // Allowed request headers
     credentials: true, // Allow cookies and authentication headers
