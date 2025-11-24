@@ -16,8 +16,10 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install --omit=dev
+RUN npm install
 
 COPY . .
 
-CMD ["node", "main.js"]
+RUN npm run build
+
+CMD ["node", "dist/main.js"]
