@@ -74,11 +74,16 @@ export class MarkdownService {
             <body>${html}</body>
           </html>
         `;
-        const pdfBuffer = htmlPdf.generatePdf(
+        // html-pdf-node returns a Promise, but types might be incorrect
+
+        const pdfPromise = htmlPdf.generatePdf(
           { content: styledHtml },
           { format: 'A4' },
-        ) as unknown as Buffer;
-        convertedBuffer = pdfBuffer;
+        ) as any;
+
+        convertedBuffer = await Promise.resolve(pdfPromise).then(
+          (buffer) => buffer as Buffer,
+        );
         extension = 'pdf';
         mimeType = 'application/pdf';
       } else {

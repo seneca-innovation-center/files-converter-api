@@ -10,7 +10,7 @@ import { ConvertMediaDto } from '../dtos/convert-media.dto';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 
-ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfmpegPath(ffmpegPath as string);
 
 /**
  * Service for video and audio conversion using FFmpeg
@@ -89,10 +89,32 @@ export class MediaService {
     try {
       await fs.writeFile(inputPath, fileBuffer);
 
+      // First, check if the file has an audio stream
+      const hasAudio = await this.checkAudioStream(inputPath);
+      if (!hasAudio) {
+        throw new Error(
+          'The input file does not contain any audio stream. Please provide a video file with audio or an audio file.',
+        );
+      }
+
       await new Promise<void>((resolve, reject) => {
-        ffmpeg(inputPath)
-          .noVideo()
-          .audioCodec('libmp3lame')
+        const command = ffmpeg(inputPath)
+          .noVideo() // Remove video stream
+          .audioChannels(2) // Stereo
+          .audioFrequency(44100); // Standard sample rate
+
+        // Set appropriate audio codec based on format
+        const audioCodec = this.getAudioCodec(audioFormat);
+        if (audioCodec) {
+          command.audioCodec(audioCodec);
+        }
+
+        // Set audio quality/bitrate
+        if (audioFormat === 'mp3') {
+          command.audioBitrate('192k');
+        }
+
+        command
           .toFormat(audioFormat)
           .on('end', () => resolve())
           .on('error', (err) => reject(err))
@@ -117,6 +139,23 @@ export class MediaService {
         // Ignore
       }
     }
+  }
+
+  private async checkAudioStream(filePath: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      ffmpeg.ffprobe(filePath, (err, metadata) => {
+        if (err) {
+          resolve(false);
+          return;
+        }
+
+        // Check if there's at least one audio stream
+        const hasAudio = metadata.streams.some(
+          (stream) => stream.codec_type === 'audio',
+        );
+        resolve(hasAudio);
+      });
+    });
   }
 
   private convertWithFfmpeg(
@@ -164,6 +203,18 @@ export class MediaService {
         .on('error', (err) => reject(err))
         .save(outputPath);
     });
+  }
+
+  private getAudioCodec(format: string): string | null {
+    const audioCodecs: Record<string, string> = {
+      mp3: 'libmp3lame',
+      wav: 'pcm_s16le',
+      ogg: 'libvorbis',
+      flac: 'flac',
+      aac: 'aac',
+      m4a: 'aac',
+    };
+    return audioCodecs[format] || null;
   }
 
   private getMimeType(format: string): string {
