@@ -40,6 +40,7 @@ export class ThreeDController {
   @ApiBody({
     schema: {
       type: 'object',
+      required: ['file', 'format'],
       properties: {
         file: {
           type: 'string',
@@ -54,12 +55,10 @@ export class ThreeDController {
         optimize: {
           type: 'boolean',
           description: 'Apply optimization (prune, weld)',
-          required: false,
         },
         compress: {
           type: 'boolean',
           description: 'Apply Draco compression for GLB files',
-          required: false,
         },
       },
     },

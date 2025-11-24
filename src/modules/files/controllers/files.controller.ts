@@ -40,6 +40,7 @@ export class FilesController {
   @ApiBody({
     schema: {
       type: 'object',
+      required: ['file', 'targetFormat'],
       properties: {
         file: {
           type: 'string',
@@ -53,7 +54,6 @@ export class FilesController {
         options: {
           type: 'string',
           description: 'Additional conversion options (JSON string)',
-          required: false,
         },
       },
     },

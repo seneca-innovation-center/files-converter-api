@@ -48,12 +48,39 @@ export class ImagesService {
         throw new BadRequestException('Invalid image file format');
       }
 
+      console.info('Input image metadata:', {
+        format: metadata.format,
+        width: metadata.width,
+        height: metadata.height,
+        space: metadata.space,
+        channels: metadata.channels,
+        hasAlpha: metadata.hasAlpha,
+      });
+
       let processedBuffer = fileBuffer;
 
       // Remove background if requested
       if (dto.removeBackground) {
+        console.info('Applying background removal...');
         try {
-          const blobResult = await removeBackground(processedBuffer);
+          // Convert buffer to PNG format first (background removal library works best with PNG)
+          const pngBuffer = await sharp(processedBuffer).png().toBuffer();
+
+          // Create a temporary file for background removal
+          const tempInputPath = join(
+            this.tmpDir,
+            `temp_input_${Date.now()}.png`,
+          );
+          await fs.writeFile(tempInputPath, pngBuffer);
+
+          console.info('Calling removeBackground with file path...');
+          const blobResult = await removeBackground(tempInputPath);
+
+          // Clean up temp file
+          await fs.unlink(tempInputPath).catch(() => {
+            // Ignore errors
+          });
+
           // Convert result to Buffer (handles Blob, Uint8Array, Buffer, etc.)
           if (blobResult instanceof Buffer) {
             processedBuffer = blobResult;
@@ -73,7 +100,12 @@ export class ImagesService {
                 : (blobResult as unknown as ArrayBuffer);
             processedBuffer = Buffer.from(arrayBuffer);
           }
+          console.info(
+            'Background removal complete, buffer size:',
+            processedBuffer.length,
+          );
         } catch (error) {
+          console.error('Background removal error:', error);
           throw new InternalServerErrorException(
             'Failed to remove background: ' + (error as Error).message,
           );
@@ -142,6 +174,18 @@ export class ImagesService {
       // Convert to buffer
       const convertedBuffer = await sharpInstance.toBuffer();
 
+      console.info('Conversion complete:', {
+        outputSize: convertedBuffer.length,
+        targetFormat: dto.format,
+      });
+
+      // Validate output buffer is not empty
+      if (convertedBuffer.length === 0) {
+        throw new InternalServerErrorException(
+          'Conversion produced an empty image',
+        );
+      }
+
       // Generate output filename
       const timestamp = Date.now();
       const randomString = Math.random().toString(36).substring(2, 15);
@@ -160,6 +204,16 @@ export class ImagesService {
 
       // Write to temporary directory
       await fs.writeFile(filePath, convertedBuffer);
+
+      // Verify the written file is valid by reading it back
+      const verifyMetadata = await sharp(convertedBuffer).metadata();
+      console.info('Output image verification:', {
+        format: verifyMetadata.format,
+        width: verifyMetadata.width,
+        height: verifyMetadata.height,
+        channels: verifyMetadata.channels,
+        size: convertedBuffer.length,
+      });
 
       // Determine MIME type
       const mimeTypes: Record<ImageFormat, string> = {
