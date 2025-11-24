@@ -11,6 +11,7 @@ export enum ImageFormat {
   AVIF = 'avif',
   TIFF = 'tiff',
   BMP = 'bmp',
+  SVG = 'svg',
 }
 
 /**

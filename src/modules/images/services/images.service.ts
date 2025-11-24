@@ -12,6 +12,9 @@ import * as sharp from 'sharp';
 
 import { ConvertImageDto, ImageFormat } from '../dtos/convert-image.dto';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const potrace = require('potrace');
+
 /**
  * Service for handling image conversion, resizing, and background removal operations.
  * Uses Sharp for format conversion and resizing, and @imgly/background-removal-node for AI background removal.
@@ -165,14 +168,28 @@ export class ImagesService {
           // For now, we'll convert BMP requests to PNG
           sharpInstance = sharpInstance.png();
           break;
+        case ImageFormat.SVG:
+          // SVG conversion requires special handling via potrace
+          // We'll process this separately below
+          break;
         default:
           throw new BadRequestException(
             `Unsupported format: ${String(dto.format)}`,
           );
       }
 
-      // Convert to buffer
-      const convertedBuffer = await sharpInstance.toBuffer();
+      let convertedBuffer: Buffer;
+
+      // Special handling for SVG conversion (image tracing)
+      if (dto.format === ImageFormat.SVG) {
+        convertedBuffer = await this.convertToSvg(
+          sharpInstance,
+          processedBuffer,
+        );
+      } else {
+        // Convert to buffer for other formats
+        convertedBuffer = await sharpInstance.toBuffer();
+      }
 
       console.info('Conversion complete:', {
         outputSize: convertedBuffer.length,
@@ -197,6 +214,7 @@ export class ImagesService {
         [ImageFormat.AVIF]: 'avif',
         [ImageFormat.TIFF]: 'tiff',
         [ImageFormat.BMP]: 'bmp',
+        [ImageFormat.SVG]: 'svg',
       };
       const extension = extensionMap[dto.format] || 'png';
       const filename = `converted_${timestamp}_${randomString}.${extension}`;
@@ -205,15 +223,22 @@ export class ImagesService {
       // Write to temporary directory
       await fs.writeFile(filePath, convertedBuffer);
 
-      // Verify the written file is valid by reading it back
-      const verifyMetadata = await sharp(convertedBuffer).metadata();
-      console.info('Output image verification:', {
-        format: verifyMetadata.format,
-        width: verifyMetadata.width,
-        height: verifyMetadata.height,
-        channels: verifyMetadata.channels,
-        size: convertedBuffer.length,
-      });
+      // Verify the written file is valid by reading it back (skip for SVG)
+      if (dto.format !== ImageFormat.SVG) {
+        const verifyMetadata = await sharp(convertedBuffer).metadata();
+        console.info('Output image verification:', {
+          format: verifyMetadata.format,
+          width: verifyMetadata.width,
+          height: verifyMetadata.height,
+          channels: verifyMetadata.channels,
+          size: convertedBuffer.length,
+        });
+      } else {
+        console.info('SVG output:', {
+          size: convertedBuffer.length,
+          format: 'svg',
+        });
+      }
 
       // Determine MIME type
       const mimeTypes: Record<ImageFormat, string> = {
@@ -223,6 +248,7 @@ export class ImagesService {
         [ImageFormat.AVIF]: 'image/avif',
         [ImageFormat.TIFF]: 'image/tiff',
         [ImageFormat.BMP]: 'image/bmp',
+        [ImageFormat.SVG]: 'image/svg+xml',
       };
 
       return {
@@ -241,6 +267,45 @@ export class ImagesService {
         'Image conversion failed: ' + (error as Error).message,
       );
     }
+  }
+
+  /**
+   * Converts an image to SVG format using image tracing.
+   * @param sharpInstance Sharp instance with applied transformations
+   * @param _originalBuffer Original buffer for fallback
+   * @returns SVG buffer
+   */
+  private async convertToSvg(
+    sharpInstance: sharp.Sharp,
+    _originalBuffer: Buffer,
+  ): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      // First, convert to PNG for potrace processing
+      sharpInstance
+        .png()
+        .toBuffer()
+        .then((pngBuffer) => {
+          // Trace the image to SVG using potrace
+          potrace.trace(pngBuffer, (err: Error | null, svg: string) => {
+            if (err) {
+              reject(
+                new InternalServerErrorException(
+                  'SVG tracing failed: ' + err.message,
+                ),
+              );
+            } else {
+              resolve(Buffer.from(svg));
+            }
+          });
+        })
+        .catch((error) => {
+          reject(
+            new InternalServerErrorException(
+              'Failed to prepare image for SVG conversion: ' + error.message,
+            ),
+          );
+        });
+    });
   }
 
   /**
