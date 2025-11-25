@@ -1,7 +1,9 @@
 import { promises as fs } from 'fs';
+import { createWriteStream } from 'fs';
 import { join } from 'path';
 
 import { Document, NodeIO } from '@gltf-transform/core';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { prune, draco, weld } from '@gltf-transform/functions';
 import {
   Injectable,
@@ -9,6 +11,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as archiver from 'archiver';
 
 import { Convert3DDto, ThreeDFormat } from '../dtos/convert-3d.dto';
 
@@ -83,7 +86,17 @@ export class ThreeDService {
         );
       }
 
-      const io = new NodeIO();
+      // Load Draco module for compression/decompression support
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const dracoModule = require('draco3dgltf');
+
+      // Create NodeIO with all extensions registered and Draco decoder/encoder
+      const io = new NodeIO()
+        .registerExtensions(ALL_EXTENSIONS)
+        .registerDependencies({
+          'draco3d.decoder': await dracoModule.createDecoderModule(),
+          'draco3d.encoder': await dracoModule.createEncoderModule(),
+        });
       let document: Document;
 
       // Read the input file
@@ -119,6 +132,7 @@ export class ThreeDService {
         const transforms = [prune()];
 
         if (dto.compress && dto.format === ThreeDFormat.GLB) {
+          // Apply Draco compression (encoder is already registered with NodeIO)
           transforms.push(draco());
         }
 
@@ -141,21 +155,36 @@ export class ThreeDService {
           mimeType = 'model/gltf-binary';
           break;
 
-        case ThreeDFormat.OBJ:
-          // Convert GLTF/GLB to OBJ
-          // Note: gltf-transform doesn't have direct OBJ export, so we'll need to use a different approach
-          // For now, we'll convert to GLTF text and then parse it
-          // This is a simplified approach - in production, you might want to use a dedicated converter
-          throw new BadRequestException(
-            'OBJ export is not yet fully supported. Please use GLB format.',
-          );
+        case ThreeDFormat.GLTF: {
+          // Export as GLTF (JSON format)
+          const jsonDoc = await io.writeJSON(document);
+          outputBuffer = Buffer.from(JSON.stringify(jsonDoc.json, null, 2));
+          filename = `converted_${timestamp}_${randomString}.gltf`;
+          mimeType = 'model/gltf+json';
+          break;
+        }
 
-        case ThreeDFormat.USDZ:
-          // USDZ conversion requires additional processing
-          // gltf-transform doesn't directly support USDZ, so this would need a custom implementation
-          throw new BadRequestException(
-            'USDZ conversion requires additional dependencies. Please use GLB format for now.',
+        case ThreeDFormat.OBJ:
+          // Convert GLTF/GLB to OBJ by extracting mesh data
+          outputBuffer = await this.convertToObj(document);
+          filename = `converted_${timestamp}_${randomString}.obj`;
+          mimeType = 'model/obj';
+          break;
+
+        case ThreeDFormat.USDZ: {
+          // Convert GLTF/GLB to USDZ (USD in a ZIP archive)
+          const usdzPath = await this.convertToUsdz(
+            document,
+            timestamp,
+            randomString,
           );
+          const usdzBuffer = await fs.readFile(usdzPath);
+          await fs.unlink(usdzPath); // Clean up temp file
+          outputBuffer = usdzBuffer;
+          filename = `converted_${timestamp}_${randomString}.usdz`;
+          mimeType = 'model/vnd.usdz+zip';
+          break;
+        }
 
         default:
           throw new BadRequestException(
@@ -179,6 +208,262 @@ export class ThreeDService {
         '3D model conversion failed: ' + (error as Error).message,
       );
     }
+  }
+
+  /**
+   * Converts a GLTF document to OBJ format
+   * @param document GLTF document
+   * @returns OBJ file buffer
+   */
+  private async convertToObj(document: Document): Promise<Buffer> {
+    let objContent = '# Converted from GLTF/GLB\n';
+    let vertexOffset = 0; // Track total vertices written
+    let texcoordOffset = 0; // Track total texture coordinates written
+    let normalOffset = 0; // Track total normals written
+
+    // Iterate through all meshes in the document
+    for (const mesh of document.getRoot().listMeshes()) {
+      const meshName = mesh.getName() || 'mesh';
+      objContent += `\no ${meshName}\n`;
+
+      for (const primitive of mesh.listPrimitives()) {
+        const position = primitive.getAttribute('POSITION');
+        const normal = primitive.getAttribute('NORMAL');
+        const texcoord = primitive.getAttribute('TEXCOORD_0');
+        const indices = primitive.getIndices();
+
+        if (!position) continue;
+
+        const positionArray = position.getArray();
+        const normalArray = normal?.getArray();
+        const texcoordArray = texcoord?.getArray();
+        const indicesArray = indices?.getArray();
+
+        if (!positionArray || !indicesArray) continue;
+
+        // Write vertices
+        for (let i = 0; i < positionArray.length; i += 3) {
+          objContent += `v ${positionArray[i].toFixed(6)} ${positionArray[i + 1].toFixed(6)} ${positionArray[i + 2].toFixed(6)}\n`;
+        }
+
+        // Write texture coordinates
+        if (texcoordArray) {
+          for (let i = 0; i < texcoordArray.length; i += 2) {
+            objContent += `vt ${texcoordArray[i].toFixed(6)} ${texcoordArray[i + 1].toFixed(6)}\n`;
+          }
+        }
+
+        // Write normals
+        if (normalArray) {
+          for (let i = 0; i < normalArray.length; i += 3) {
+            objContent += `vn ${normalArray[i].toFixed(6)} ${normalArray[i + 1].toFixed(6)} ${normalArray[i + 2].toFixed(6)}\n`;
+          }
+        }
+
+        // Write faces with proper offsetting
+        // OBJ indices start at 1, so we add 1 to the offset
+        for (let i = 0; i < indicesArray.length; i += 3) {
+          const idx1 = indicesArray[i];
+          const idx2 = indicesArray[i + 1];
+          const idx3 = indicesArray[i + 2];
+
+          // Calculate actual OBJ indices (1-based, with offsets)
+          const v1 = idx1 + vertexOffset + 1;
+          const v2 = idx2 + vertexOffset + 1;
+          const v3 = idx3 + vertexOffset + 1;
+
+          if (texcoordArray && normalArray) {
+            // Format: f v1/vt1/vn1 v2/vt2/vn2 v3/vt3/vn3
+            const vt1 = idx1 + texcoordOffset + 1;
+            const vt2 = idx2 + texcoordOffset + 1;
+            const vt3 = idx3 + texcoordOffset + 1;
+            const vn1 = idx1 + normalOffset + 1;
+            const vn2 = idx2 + normalOffset + 1;
+            const vn3 = idx3 + normalOffset + 1;
+            objContent += `f ${v1}/${vt1}/${vn1} ${v2}/${vt2}/${vn2} ${v3}/${vt3}/${vn3}\n`;
+          } else if (normalArray) {
+            // Format: f v1//vn1 v2//vn2 v3//vn3
+            const vn1 = idx1 + normalOffset + 1;
+            const vn2 = idx2 + normalOffset + 1;
+            const vn3 = idx3 + normalOffset + 1;
+            objContent += `f ${v1}//${vn1} ${v2}//${vn2} ${v3}//${vn3}\n`;
+          } else if (texcoordArray) {
+            // Format: f v1/vt1 v2/vt2 v3/vt3
+            const vt1 = idx1 + texcoordOffset + 1;
+            const vt2 = idx2 + texcoordOffset + 1;
+            const vt3 = idx3 + texcoordOffset + 1;
+            objContent += `f ${v1}/${vt1} ${v2}/${vt2} ${v3}/${vt3}\n`;
+          } else {
+            // Format: f v1 v2 v3
+            objContent += `f ${v1} ${v2} ${v3}\n`;
+          }
+        }
+
+        // Update offsets for next primitive
+        vertexOffset += positionArray.length / 3;
+        if (texcoordArray) {
+          texcoordOffset += texcoordArray.length / 2;
+        }
+        if (normalArray) {
+          normalOffset += normalArray.length / 3;
+        }
+      }
+    }
+
+    return Buffer.from(objContent, 'utf-8');
+  }
+
+  /**
+   * Converts a GLTF document to USDZ format
+   * @param document GLTF document
+   * @param timestamp Timestamp for unique filename
+   * @param randomString Random string for unique filename
+   * @returns Path to the created USDZ file
+   */
+  private async convertToUsdz(
+    document: Document,
+    timestamp: number,
+    randomString: string,
+  ): Promise<string> {
+    // Create USDA (USD ASCII) content
+    let usdaContent = `#usda 1.0
+(
+    defaultPrim = "Root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Root"
+{
+`;
+
+    let meshIndex = 0;
+    // Extract mesh data and create USD geometry
+    for (const mesh of document.getRoot().listMeshes()) {
+      const meshBaseName = mesh.getName() || `Mesh_${meshIndex}`;
+
+      let primitiveIndex = 0;
+      for (const primitive of mesh.listPrimitives()) {
+        const position = primitive.getAttribute('POSITION');
+        const normal = primitive.getAttribute('NORMAL');
+        const texcoord = primitive.getAttribute('TEXCOORD_0');
+        const indices = primitive.getIndices();
+
+        if (!position) continue;
+
+        const positionArray = position.getArray();
+        const normalArray = normal?.getArray();
+        const texcoordArray = texcoord?.getArray();
+        const indicesArray = indices?.getArray();
+
+        if (!positionArray || !indicesArray) continue;
+
+        // Create unique mesh name for each primitive
+        const meshName = `${meshBaseName}_${primitiveIndex}`.replace(
+          /[^a-zA-Z0-9_]/g,
+          '_',
+        );
+
+        usdaContent += `    def Mesh "${meshName}"\n    {\n`;
+
+        // Subdivision scheme
+        usdaContent += '        uniform token subdivisionScheme = "none"\n';
+
+        // Write points (vertices)
+        usdaContent += '        point3f[] points = [\n';
+        for (let i = 0; i < positionArray.length; i += 3) {
+          const x = positionArray[i].toFixed(6);
+          const y = positionArray[i + 1].toFixed(6);
+          const z = positionArray[i + 2].toFixed(6);
+          usdaContent += `            (${x}, ${y}, ${z})${i + 3 < positionArray.length ? ',' : ''}\n`;
+        }
+        usdaContent += '        ]\n';
+
+        // Write normals if available
+        if (normalArray && normalArray.length > 0) {
+          usdaContent += '        normal3f[] normals = [\n';
+          for (let i = 0; i < normalArray.length; i += 3) {
+            const x = normalArray[i].toFixed(6);
+            const y = normalArray[i + 1].toFixed(6);
+            const z = normalArray[i + 2].toFixed(6);
+            usdaContent += `            (${x}, ${y}, ${z})${i + 3 < normalArray.length ? ',' : ''}\n`;
+          }
+          usdaContent += '        ] (\n';
+          usdaContent += '            interpolation = "vertex"\n';
+          usdaContent += '        )\n';
+        }
+
+        // Write texture coordinates if available
+        if (texcoordArray && texcoordArray.length > 0) {
+          usdaContent += '        float2[] primvars:st = [\n';
+          for (let i = 0; i < texcoordArray.length; i += 2) {
+            const u = texcoordArray[i].toFixed(6);
+            const v = texcoordArray[i + 1].toFixed(6);
+            usdaContent += `            (${u}, ${v})${i + 2 < texcoordArray.length ? ',' : ''}\n`;
+          }
+          usdaContent += '        ] (\n';
+          usdaContent += '            interpolation = "vertex"\n';
+          usdaContent += '        )\n';
+        }
+
+        // Write face vertex counts (triangles = 3 vertices each)
+        const faceCount = Math.floor(indicesArray.length / 3);
+        usdaContent += '        int[] faceVertexCounts = [';
+        const counts = Array(faceCount).fill(3);
+        usdaContent += counts.join(', ');
+        usdaContent += ']\n';
+
+        // Write face vertex indices
+        usdaContent += '        int[] faceVertexIndices = [\n';
+        for (let i = 0; i < indicesArray.length; i += 30) {
+          usdaContent += '            ';
+          const end = Math.min(i + 30, indicesArray.length);
+          for (let j = i; j < end; j++) {
+            usdaContent += `${indicesArray[j]}${j < indicesArray.length - 1 ? ', ' : ''}`;
+          }
+          usdaContent += '\n';
+        }
+        usdaContent += '        ]\n';
+
+        usdaContent += '    }\n\n';
+        primitiveIndex++;
+      }
+
+      meshIndex++;
+    }
+
+    usdaContent += '}\n';
+
+    // Create temporary USDA file
+    const usdaFilename = `model_${timestamp}_${randomString}.usda`;
+    const usdaPath = join(this.tmpDir, usdaFilename);
+    await fs.writeFile(usdaPath, usdaContent);
+
+    // Create USDZ (ZIP archive containing the USDA file)
+    const usdzFilename = `model_${timestamp}_${randomString}.usdz`;
+    const usdzPath = join(this.tmpDir, usdzFilename);
+
+    await new Promise<void>((resolve, reject) => {
+      const output = createWriteStream(usdzPath);
+      const archive = archiver('zip', {
+        zlib: { level: 9 }, // Maximum compression
+      });
+
+      output.on('close', () => resolve());
+      archive.on('error', (err) => reject(err));
+
+      archive.pipe(output);
+
+      // Add the USDA file to the archive
+      archive.file(usdaPath, { name: 'model.usda' });
+
+      void archive.finalize();
+    });
+
+    // Clean up temporary USDA file
+    await fs.unlink(usdaPath);
+
+    return usdzPath;
   }
 
   /**

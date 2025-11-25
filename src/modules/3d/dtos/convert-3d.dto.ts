@@ -6,6 +6,7 @@ import { IsEnum, IsOptional, IsBoolean } from 'class-validator';
  */
 export enum ThreeDFormat {
   GLB = 'glb',
+  GLTF = 'gltf',
   OBJ = 'obj',
   USDZ = 'usdz',
 }
