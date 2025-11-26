@@ -75,4 +75,14 @@ export class ConvertImageDto {
   })
   @IsOptional()
   removeBackground?: boolean;
+
+  @ApiProperty({
+    description:
+      'For SVG format: use color vectorization (true) or black and white (false). Default: false (black and white)',
+    required: false,
+    default: false,
+    example: false,
+  })
+  @IsOptional()
+  colorVectorization?: boolean;
 }

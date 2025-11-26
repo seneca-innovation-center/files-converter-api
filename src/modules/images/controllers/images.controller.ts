@@ -49,7 +49,7 @@ export class ImagesController {
         },
         format: {
           type: 'string',
-          enum: ['jpeg', 'png', 'webp', 'avif', 'tiff', 'bmp'],
+          enum: ['jpeg', 'png', 'webp', 'avif', 'tiff', 'bmp', 'svg'],
           description: 'Target format for conversion',
         },
         width: {
@@ -67,6 +67,11 @@ export class ImagesController {
         removeBackground: {
           type: 'boolean',
           description: 'Remove background using AI',
+        },
+        colorVectorization: {
+          type: 'boolean',
+          description:
+            'For SVG format: use color vectorization (true) or black and white (false). Default: false',
         },
       },
     },
@@ -127,6 +132,8 @@ export class ImagesController {
       dto.height = fields.height ? parseInt(fields.height, 10) : undefined;
       dto.quality = fields.quality ? parseInt(fields.quality, 10) : undefined;
       dto.removeBackground = fields.removeBackground === 'true';
+      dto.colorVectorization =
+        fields.colorVectorization === 'true' ? true : undefined;
 
       // Log conversion parameters for debugging
       console.info('Conversion parameters:', {
@@ -135,6 +142,7 @@ export class ImagesController {
         height: dto.height,
         quality: dto.quality,
         removeBackground: dto.removeBackground,
+        colorVectorization: dto.colorVectorization,
         fileSize: fileBuffer.length,
         filename,
       });

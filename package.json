@@ -89,6 +89,7 @@
     "heic-convert": "^2.1.0",
     "highlight.js": "^11.11.1",
     "html-pdf-node": "^1.0.8",
+    "imagetracerjs": "^1.2.6",
     "jsbarcode": "^3.12.1",
     "jsqr": "^1.4.0",
     "libreoffice-convert": "^1.7.0",
