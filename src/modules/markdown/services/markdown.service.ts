@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import * as htmlPdf from 'html-pdf-node';
 import { marked } from 'marked';
 import * as TurndownService from 'turndown';
+import type TurndownServiceType from 'turndown';
 
 import {
   ConvertMarkdownDto,
@@ -22,13 +23,14 @@ import {
 @Injectable()
 export class MarkdownService {
   private readonly tmpDir: string;
-  private readonly turndownService: any;
+  private readonly turndownService: TurndownServiceType;
 
   constructor(private readonly configService: ConfigService) {
     this.tmpDir = process.env.TMP_DIR || '/tmp';
     // Handle both CommonJS and ES module exports
     const TurndownConstructor =
-      (TurndownService as any).default || TurndownService;
+      (TurndownService as { default?: typeof TurndownService }).default ||
+      TurndownService;
     this.turndownService = new TurndownConstructor();
   }
 
@@ -74,16 +76,16 @@ export class MarkdownService {
             <body>${html}</body>
           </html>
         `;
-        // html-pdf-node returns a Promise, but types might be incorrect
-
+        // html-pdf-node returns a Promise<Buffer> but types are incorrect
         const pdfPromise = htmlPdf.generatePdf(
           { content: styledHtml },
           { format: 'A4' },
-        ) as any;
+        ) as unknown as Promise<Buffer>;
 
-        convertedBuffer = await Promise.resolve(pdfPromise).then(
-          (buffer) => buffer as Buffer,
-        );
+        const pdfResult = await pdfPromise;
+        convertedBuffer = Buffer.isBuffer(pdfResult)
+          ? pdfResult
+          : Buffer.from(pdfResult as Uint8Array);
         extension = 'pdf';
         mimeType = 'application/pdf';
       } else {
@@ -122,14 +124,14 @@ export class MarkdownService {
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
       const html = fileBuffer.toString('utf-8');
-      const markdown = this.turndownService.turndown(html) as string;
+      const markdown = this.turndownService.turndown(html);
 
       const timestamp = Date.now();
       const randomString = Math.random().toString(36).substring(2, 15);
       const filename = `converted_${timestamp}_${randomString}.md`;
       const filePath = join(this.tmpDir, filename);
 
-      await fs.writeFile(filePath, markdown);
+      await fs.writeFile(filePath, String(markdown), 'utf-8');
 
       return {
         filePath,

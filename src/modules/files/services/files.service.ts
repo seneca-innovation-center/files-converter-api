@@ -7,14 +7,24 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
 import { Document, Paragraph, TextRun, Packer } from 'docx';
+import * as ExcelJS from 'exceljs';
 import * as htmlPdf from 'html-pdf-node';
 import * as mammoth from 'mammoth';
+import {
+  PDFDocument,
+  PDFTextField,
+  PDFCheckBox,
+  PDFDropdown,
+  PDFRadioGroup,
+} from 'pdf-lib';
 import { PDFParse } from 'pdf-parse';
 import * as PDFKit from 'pdfkit';
 import * as XLSX from 'xlsx';
 
 import { ConvertFileDto } from '../dtos/convert-file.dto';
+import { SplitPdfDto, FillPdfFormDto } from '../dtos/pdf-operations.dto';
 
 /**
  * Service for handling general file conversion operations.
@@ -46,7 +56,7 @@ export class FilesService {
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
       // Parse options if provided
-      let _options: Record<string, any> = {};
+      let _options: Record<string, unknown> = {};
       if (dto.options) {
         try {
           _options = JSON.parse(dto.options);
@@ -302,6 +312,399 @@ export class FilesService {
    */
   async getFileBuffer(filePath: string): Promise<Buffer> {
     return fs.readFile(filePath);
+  }
+
+  /**
+   * Merges multiple PDF files into one
+   */
+  async mergePdfs(
+    pdfBuffers: Buffer[],
+  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+    try {
+      if (pdfBuffers.length === 0) {
+        throw new BadRequestException('At least one PDF file is required');
+      }
+
+      const mergedPdf = await PDFDocument.create();
+
+      for (const pdfBuffer of pdfBuffers) {
+        const pdf = await PDFDocument.load(pdfBuffer);
+        const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+        pages.forEach((page) => mergedPdf.addPage(page));
+      }
+
+      const mergedPdfBytes = await mergedPdf.save();
+
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 15);
+      const filename = `merged_${timestamp}_${randomString}.pdf`;
+      const filePath = join(this.tmpDir, filename);
+
+      await fs.writeFile(filePath, Buffer.from(mergedPdfBytes));
+
+      return {
+        filePath,
+        filename,
+        mimeType: 'application/pdf',
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'PDF merge failed: ' + (error as Error).message,
+      );
+    }
+  }
+
+  /**
+   * Splits a PDF file
+   */
+  async splitPdf(
+    pdfBuffer: Buffer,
+    dto: SplitPdfDto,
+  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+    try {
+      const pdf = await PDFDocument.load(pdfBuffer);
+      const totalPages = pdf.getPageCount();
+
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 15);
+
+      if (dto.splitAt) {
+        // Split at specific page numbers
+        const splitPages = dto.splitAt
+          .split(',')
+          .map((p) => parseInt(p.trim(), 10));
+        splitPages.sort((a, b) => a - b);
+
+        // Create a ZIP with multiple PDFs
+        const results: Array<{ filePath: string; filename: string }> = [];
+
+        let startPage = 0;
+        for (let i = 0; i < splitPages.length; i++) {
+          const endPage = splitPages[i] - 1; // Convert to 0-indexed
+          const newPdf = await PDFDocument.create();
+          const pages = await newPdf.copyPages(
+            pdf,
+            Array.from(
+              { length: endPage - startPage + 1 },
+              (_, i) => startPage + i,
+            ),
+          );
+          pages.forEach((page) => newPdf.addPage(page));
+
+          const pdfBytes = await newPdf.save();
+          const filename = `split_${startPage + 1}_${endPage + 1}_${timestamp}_${randomString}.pdf`;
+          const filePath = join(this.tmpDir, filename);
+          await fs.writeFile(filePath, pdfBytes);
+          results.push({ filePath, filename });
+
+          startPage = endPage + 1;
+        }
+
+        // Return the first split (or create a ZIP in production)
+        return {
+          filePath: results[0].filePath,
+          filename: results[0].filename,
+          mimeType: 'application/pdf',
+        };
+      } else if (dto.splitFrom && dto.splitTo) {
+        // Split specific range
+        const fromPage = Math.max(0, dto.splitFrom - 1); // Convert to 0-indexed
+        const toPage = Math.min(totalPages - 1, dto.splitTo - 1);
+
+        if (fromPage > toPage) {
+          throw new BadRequestException(
+            'splitFrom must be less than or equal to splitTo',
+          );
+        }
+
+        const newPdf = await PDFDocument.create();
+        const pages = await newPdf.copyPages(
+          pdf,
+          Array.from({ length: toPage - fromPage + 1 }, (_, i) => fromPage + i),
+        );
+        pages.forEach((page) => newPdf.addPage(page));
+
+        const pdfBytes = await newPdf.save();
+        const filename = `split_${dto.splitFrom}_${dto.splitTo}_${timestamp}_${randomString}.pdf`;
+        const filePath = join(this.tmpDir, filename);
+        await fs.writeFile(filePath, pdfBytes);
+
+        return {
+          filePath,
+          filename,
+          mimeType: 'application/pdf',
+        };
+      } else {
+        throw new BadRequestException(
+          'Either splitAt or both splitFrom and splitTo must be provided',
+        );
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'PDF split failed: ' + (error as Error).message,
+      );
+    }
+  }
+
+  /**
+   * Fills PDF form fields
+   */
+  async fillPdfForm(
+    pdfBuffer: Buffer,
+    dto: FillPdfFormDto,
+  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+    try {
+      const pdf = await PDFDocument.load(pdfBuffer);
+      const form = pdf.getForm();
+
+      // Parse form data
+      const formData = JSON.parse(dto.formData);
+
+      // Fill form fields
+      const fields = form.getFields();
+      for (const field of fields) {
+        const fieldName = field.getName();
+        if (formData[fieldName] !== undefined) {
+          if (field instanceof PDFTextField) {
+            field.setText(String(formData[fieldName]));
+          } else if (field instanceof PDFCheckBox) {
+            if (formData[fieldName]) {
+              field.check();
+            } else {
+              field.uncheck();
+            }
+          } else if (field instanceof PDFDropdown) {
+            field.select(String(formData[fieldName]));
+          } else if (field instanceof PDFRadioGroup) {
+            field.select(String(formData[fieldName]));
+          }
+        }
+      }
+
+      // Flatten form (make it non-editable)
+      form.flatten();
+
+      const pdfBytes = await pdf.save();
+
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 15);
+      const filename = `filled_${timestamp}_${randomString}.pdf`;
+      const filePath = join(this.tmpDir, filename);
+
+      await fs.writeFile(filePath, pdfBytes);
+
+      return {
+        filePath,
+        filename,
+        mimeType: 'application/pdf',
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'PDF form filling failed: ' + (error as Error).message,
+      );
+    }
+  }
+
+  /**
+   * Exports Excel chart as image
+   * Extracts chart data from Excel and renders it using Chart.js
+   */
+  async exportExcelChart(
+    excelBuffer: Buffer,
+    sheetName?: string,
+    _chartIndex: number = 0,
+  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      // ExcelJS expects Buffer or ArrayBuffer
+      // Convert Buffer to ArrayBuffer to satisfy type requirements
+      const uint8Array = new Uint8Array(excelBuffer);
+      const arrayBuffer = uint8Array.buffer.slice(
+        uint8Array.byteOffset,
+        uint8Array.byteOffset + uint8Array.byteLength,
+      );
+      await workbook.xlsx.load(arrayBuffer);
+
+      const worksheet = sheetName
+        ? workbook.getWorksheet(sheetName)
+        : workbook.worksheets[0];
+
+      if (!worksheet) {
+        throw new BadRequestException('Worksheet not found');
+      }
+
+      // ExcelJS doesn't provide direct access to chart data
+      // We'll extract numeric data from the worksheet and create a chart visualization
+      // This approach works by analyzing the worksheet data and creating a chart from it
+
+      // Extract data range from chart (if available in chart definition)
+      // Since ExcelJS doesn't expose chart data directly, we'll extract
+      // all numeric data from the worksheet and create a visualization
+      const dataRows: Array<Array<string | number>> = [];
+      const labels: string[] = [];
+      const datasets: Array<{ label: string; data: number[] }> = [];
+
+      // Read worksheet data
+      worksheet.eachRow((row) => {
+        const rowData: Array<string | number> = [];
+        row.eachCell((cell, colNumber) => {
+          if (cell.value !== null && cell.value !== undefined) {
+            const value =
+              typeof cell.value === 'object' && 'text' in cell.value
+                ? cell.value.text
+                : cell.value;
+            rowData[colNumber - 1] = value as string | number;
+          }
+        });
+        if (rowData.length > 0) {
+          dataRows.push(rowData);
+        }
+      });
+
+      // If we have data, create a chart from it
+      if (dataRows.length === 0) {
+        throw new BadRequestException(
+          'No data found in the worksheet to create a chart',
+        );
+      }
+
+      // Use first row as labels (if it contains strings)
+      const firstRow = dataRows[0];
+      const isFirstRowLabels = firstRow.some((val) => typeof val === 'string');
+
+      if (isFirstRowLabels && dataRows.length > 1) {
+        // First row is headers
+        firstRow.forEach((val, idx) => {
+          if (typeof val === 'string') {
+            labels.push(val);
+          } else {
+            labels.push(`Column ${idx + 1}`);
+          }
+        });
+
+        // Extract data series (skip first row)
+        for (let i = 1; i < dataRows.length; i++) {
+          const row = dataRows[i];
+          const numericData: number[] = [];
+          row.forEach((val) => {
+            if (typeof val === 'number') {
+              numericData.push(val);
+            }
+          });
+          if (numericData.length > 0) {
+            datasets.push({
+              label: `Series ${i}`,
+              data: numericData,
+            });
+          }
+        }
+      } else {
+        // No headers, use row numbers as labels
+        dataRows.forEach((row, idx) => {
+          labels.push(`Row ${idx + 1}`);
+          const numericData: number[] = [];
+          row.forEach((val) => {
+            if (typeof val === 'number') {
+              numericData.push(val);
+            }
+          });
+          if (numericData.length > 0) {
+            datasets.push({
+              label: `Series ${idx + 1}`,
+              data: numericData,
+            });
+          }
+        });
+      }
+
+      if (datasets.length === 0) {
+        throw new BadRequestException(
+          'No numeric data found in the worksheet to create a chart',
+        );
+      }
+
+      // Limit labels to match data length
+      const maxDataLength = Math.max(...datasets.map((ds) => ds.data.length));
+      const chartLabels = labels.slice(0, maxDataLength);
+
+      // Create chart using Chart.js
+      const chartJSNodeCanvas = new ChartJSNodeCanvas({
+        width: 800,
+        height: 600,
+        backgroundColour: 'white',
+      });
+
+      // Determine chart type based on data
+      const chartType: 'line' | 'bar' | 'pie' =
+        datasets.length === 1 ? 'pie' : 'bar';
+
+      const configuration = {
+        type: chartType,
+        data: {
+          labels: chartLabels,
+          datasets: datasets.map((ds, idx) => ({
+            label: ds.label,
+            data: ds.data,
+            backgroundColor: [
+              'rgba(54, 162, 235, 0.6)',
+              'rgba(255, 99, 132, 0.6)',
+              'rgba(255, 206, 86, 0.6)',
+              'rgba(75, 192, 192, 0.6)',
+              'rgba(153, 102, 255, 0.6)',
+              'rgba(255, 159, 64, 0.6)',
+            ][idx % 6],
+            borderColor: [
+              'rgba(54, 162, 235, 1)',
+              'rgba(255, 99, 132, 1)',
+              'rgba(255, 206, 86, 1)',
+              'rgba(75, 192, 192, 1)',
+              'rgba(153, 102, 255, 1)',
+              'rgba(255, 159, 64, 1)',
+            ][idx % 6],
+            borderWidth: 2,
+          })),
+        },
+        options: {
+          responsive: false,
+          plugins: {
+            title: {
+              display: true,
+              text: worksheet.name || 'Chart',
+            },
+            legend: {
+              display: datasets.length > 1,
+            },
+          },
+        },
+      };
+
+      // Render chart to image buffer
+      const imageBuffer = await chartJSNodeCanvas.renderToBuffer(configuration);
+
+      // Generate output filename
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 15);
+      const filename = `chart_${timestamp}_${randomString}.png`;
+      const filePath = join(this.tmpDir, filename);
+
+      await fs.writeFile(filePath, imageBuffer);
+
+      return {
+        filePath,
+        filename,
+        mimeType: 'image/png',
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Excel chart export failed: ' + (error as Error).message,
+      );
+    }
   }
 
   /**

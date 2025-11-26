@@ -8,7 +8,7 @@ import {
 import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { CreateArchiveDto } from '../dtos/create-archive.dto';
+import { CreateArchiveDto, ArchiveFormat } from '../dtos/create-archive.dto';
 import { ArchivesService } from '../services/archives.service';
 
 /**
@@ -82,7 +82,7 @@ export class ArchivesController {
     }
 
     const dto = new CreateArchiveDto();
-    dto.format = fields.format as any;
+    dto.format = fields.format as ArchiveFormat;
     dto.compressionLevel = fields.compressionLevel
       ? parseInt(fields.compressionLevel)
       : undefined;

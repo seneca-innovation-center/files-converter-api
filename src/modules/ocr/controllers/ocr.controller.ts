@@ -8,7 +8,7 @@ import {
 import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { ExtractTextDto } from '../dtos/extract-text.dto';
+import { ExtractTextDto, OcrLanguage } from '../dtos/extract-text.dto';
 import { OcrService } from '../services/ocr.service';
 
 /**
@@ -66,15 +66,7 @@ export class OcrController {
 
     for await (const part of parts) {
       if (part.type === 'file') {
-        const chunks: Buffer[] = [];
-        for await (const chunk of part.file) {
-          chunks.push(
-            chunk instanceof Buffer
-              ? chunk
-              : Buffer.from(await (chunk as Blob).arrayBuffer()),
-          );
-        }
-        fileBuffer = Buffer.concat(chunks);
+        fileBuffer = await part.toBuffer();
       } else if (part.type === 'field') {
         fields[part.fieldname] = part.value as string;
       }
@@ -85,7 +77,7 @@ export class OcrController {
     }
 
     const dto = new ExtractTextDto();
-    dto.language = fields.language as any;
+    dto.language = fields.language as OcrLanguage | undefined;
     dto.outputFormat = fields.outputFormat;
 
     const result = await this.ocrService.extractText(fileBuffer, dto);

@@ -9,6 +9,9 @@ export enum ThreeDFormat {
   GLTF = 'gltf',
   OBJ = 'obj',
   USDZ = 'usdz',
+  FBX = 'fbx',
+  STL = 'stl',
+  PLY = 'ply',
 }
 
 /**

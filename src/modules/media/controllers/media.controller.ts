@@ -4,11 +4,23 @@ import {
   Req,
   Res,
   BadRequestException,
+  HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiConsumes,
+  ApiBody,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { ConvertMediaDto } from '../dtos/convert-media.dto';
+import {
+  TrimVideoDto,
+  ExtractFrameDto,
+  SubtitleOperationDto,
+} from '../dtos/video-operations.dto';
 import { MediaService } from '../services/media.service';
 
 /**
@@ -66,15 +78,7 @@ export class MediaController {
 
     for await (const part of parts) {
       if (part.type === 'file') {
-        const chunks: Buffer[] = [];
-        for await (const chunk of part.file) {
-          chunks.push(
-            chunk instanceof Buffer
-              ? chunk
-              : Buffer.from(await (chunk as Blob).arrayBuffer()),
-          );
-        }
-        fileBuffer = Buffer.concat(chunks);
+        fileBuffer = await part.toBuffer();
         filename = part.filename || 'file';
       } else if (part.type === 'field') {
         fields[part.fieldname] = part.value as string;
@@ -147,15 +151,7 @@ export class MediaController {
 
     for await (const part of parts) {
       if (part.type === 'file') {
-        const chunks: Buffer[] = [];
-        for await (const chunk of part.file) {
-          chunks.push(
-            chunk instanceof Buffer
-              ? chunk
-              : Buffer.from(await (chunk as Blob).arrayBuffer()),
-          );
-        }
-        fileBuffer = Buffer.concat(chunks);
+        fileBuffer = await part.toBuffer();
       } else if (part.type === 'field') {
         fields[part.fieldname] = part.value as string;
       }
@@ -179,6 +175,349 @@ export class MediaController {
     reply.header('Content-Length', buffer.length.toString());
 
     await reply.send(buffer);
+
+    this.mediaService.deleteFile(result.filePath).catch(() => {});
+  }
+
+  @Post('thumbnail')
+  @ApiOperation({ summary: 'Generate thumbnail from video (first frame)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Video file',
+        },
+        time: {
+          type: 'number',
+          description: 'Time in seconds to capture (default: 0)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Thumbnail generated successfully',
+    type: Buffer,
+  })
+  async generateThumbnail(
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const parts = request.parts();
+    let fileBuffer: Buffer | null = null;
+    const fields: Record<string, string> = {};
+
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        fileBuffer = await part.toBuffer();
+      } else if (part.type === 'field') {
+        fields[part.fieldname] = part.value as string;
+      }
+    }
+
+    if (!fileBuffer) {
+      throw new BadRequestException('No video file uploaded');
+    }
+
+    const time = fields.time ? parseFloat(fields.time) : 0;
+    const result = await this.mediaService.generateThumbnail(fileBuffer, time);
+    const buffer = await this.mediaService.getFileBuffer(result.filePath);
+
+    reply.header('Content-Type', result.mimeType);
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename="${result.filename}"`,
+    );
+    reply.header('Content-Length', buffer.length.toString());
+    reply.send(buffer);
+
+    this.mediaService.deleteFile(result.filePath).catch(() => {});
+  }
+
+  @Post('trim')
+  @ApiOperation({ summary: 'Trim/cut video' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file', 'startTime', 'endTime'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Video file',
+        },
+        startTime: {
+          type: 'number',
+          description: 'Start time in seconds',
+        },
+        endTime: {
+          type: 'number',
+          description: 'End time in seconds',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Video trimmed successfully',
+    type: Buffer,
+  })
+  async trimVideo(
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const parts = request.parts();
+    let fileBuffer: Buffer | null = null;
+    const fields: Record<string, string> = {};
+
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        fileBuffer = await part.toBuffer();
+      } else if (part.type === 'field') {
+        fields[part.fieldname] = part.value as string;
+      }
+    }
+
+    if (!fileBuffer) {
+      throw new BadRequestException('No video file uploaded');
+    }
+
+    const dto = new TrimVideoDto();
+    dto.startTime = fields.startTime ? parseFloat(fields.startTime) : 0;
+    dto.endTime = fields.endTime ? parseFloat(fields.endTime) : 0;
+
+    const result = await this.mediaService.trimVideo(fileBuffer, dto);
+    const buffer = await this.mediaService.getFileBuffer(result.filePath);
+
+    reply.header('Content-Type', result.mimeType);
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename="${result.filename}"`,
+    );
+    reply.header('Content-Length', buffer.length.toString());
+    reply.send(buffer);
+
+    this.mediaService.deleteFile(result.filePath).catch(() => {});
+  }
+
+  @Post('merge')
+  @ApiOperation({ summary: 'Merge multiple videos' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['files'],
+      properties: {
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+          description: 'Multiple video files to merge',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Videos merged successfully',
+    type: Buffer,
+  })
+  async mergeVideos(
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const parts = request.parts();
+    const videoBuffers: Buffer[] = [];
+
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        videoBuffers.push(await part.toBuffer());
+      }
+    }
+
+    if (videoBuffers.length === 0) {
+      throw new BadRequestException('No video files uploaded');
+    }
+
+    const result = await this.mediaService.mergeVideos(videoBuffers);
+    const buffer = await this.mediaService.getFileBuffer(result.filePath);
+
+    reply.header('Content-Type', result.mimeType);
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename="${result.filename}"`,
+    );
+    reply.header('Content-Length', buffer.length.toString());
+    reply.send(buffer);
+
+    this.mediaService.deleteFile(result.filePath).catch(() => {});
+  }
+
+  @Post('extract-frame')
+  @ApiOperation({ summary: 'Extract frame from video' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Video file',
+        },
+        time: {
+          type: 'number',
+          description: 'Time in seconds to extract frame',
+        },
+        frameNumber: {
+          type: 'number',
+          description: 'Frame number to extract',
+        },
+        format: {
+          type: 'string',
+          enum: ['png', 'jpeg'],
+          description: 'Output format',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Frame extracted successfully',
+    type: Buffer,
+  })
+  async extractFrame(
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const parts = request.parts();
+    let fileBuffer: Buffer | null = null;
+    const fields: Record<string, string> = {};
+
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        fileBuffer = await part.toBuffer();
+      } else if (part.type === 'field') {
+        fields[part.fieldname] = part.value as string;
+      }
+    }
+
+    if (!fileBuffer) {
+      throw new BadRequestException('No video file uploaded');
+    }
+
+    const dto = new ExtractFrameDto();
+    dto.time = fields.time ? parseFloat(fields.time) : undefined;
+    dto.frameNumber = fields.frameNumber
+      ? parseInt(fields.frameNumber, 10)
+      : undefined;
+    dto.format = (fields.format as 'png' | 'jpeg') || 'png';
+
+    const result = await this.mediaService.extractFrame(fileBuffer, dto);
+    const buffer = await this.mediaService.getFileBuffer(result.filePath);
+
+    reply.header('Content-Type', result.mimeType);
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename="${result.filename}"`,
+    );
+    reply.header('Content-Length', buffer.length.toString());
+    reply.send(buffer);
+
+    this.mediaService.deleteFile(result.filePath).catch(() => {});
+  }
+
+  @Post('subtitles')
+  @ApiOperation({ summary: 'Extract or embed subtitles' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Video file',
+        },
+        subtitleFile: {
+          type: 'string',
+          format: 'binary',
+          description: 'Subtitle file (for embedding)',
+        },
+        subtitleText: {
+          type: 'string',
+          description: 'Subtitle text content (for embedding)',
+        },
+        operation: {
+          type: 'string',
+          enum: ['extract', 'embed'],
+          description: 'Operation: extract or embed',
+        },
+        format: {
+          type: 'string',
+          enum: ['srt', 'vtt', 'ass'],
+          description: 'Subtitle format',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Subtitle operation completed successfully',
+    type: Buffer,
+  })
+  @Post('subtitles')
+  async handleSubtitles(
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const parts = request.parts();
+    let fileBuffer: Buffer | null = null;
+    let subtitleFile: Buffer | null = null;
+    const fields: Record<string, string> = {};
+
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        const buffer = await part.toBuffer();
+        if (part.fieldname === 'subtitleFile') {
+          subtitleFile = buffer;
+        } else {
+          fileBuffer = buffer;
+        }
+      } else if (part.type === 'field') {
+        fields[part.fieldname] = part.value as string;
+      }
+    }
+
+    if (!fileBuffer) throw new BadRequestException('No video file uploaded');
+
+    const dto = new SubtitleOperationDto();
+    dto.subtitleFile = subtitleFile || undefined;
+    dto.subtitleText = fields.subtitleText;
+    dto.operation = (fields.operation as 'extract' | 'embed') || 'extract';
+    dto.format = (fields.format as 'srt' | 'vtt' | 'ass') || 'srt';
+
+    const result = await this.mediaService.handleSubtitles(fileBuffer, dto);
+    const buffer = await this.mediaService.getFileBuffer(result.filePath);
+
+    reply
+      .header('Content-Type', result.mimeType)
+      .header(
+        'Content-Disposition',
+        `attachment; filename="${result.filename}"`,
+      )
+      .header('Content-Length', buffer.length.toString())
+      .send(buffer);
 
     this.mediaService.deleteFile(result.filePath).catch(() => {});
   }

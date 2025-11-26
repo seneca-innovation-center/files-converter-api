@@ -4,10 +4,18 @@ import {
   Req,
   Res,
   BadRequestException,
+  HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiConsumes,
+  ApiBody,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { Extract3DDataDto, ExtractType } from '../dtos/3d-operations.dto';
 import { Convert3DDto, ThreeDFormat } from '../dtos/convert-3d.dto';
 import { ThreeDService } from '../services/3d.service';
 
@@ -49,7 +57,7 @@ export class ThreeDController {
         },
         format: {
           type: 'string',
-          enum: ['glb', 'obj', 'usdz'],
+          enum: Object.values(ThreeDFormat),
           description: 'Target format for conversion',
         },
         optimize: {
@@ -136,6 +144,95 @@ export class ThreeDController {
     await reply.send(resultBuffer);
 
     // Clean up temporary file after sending (fire and forget)
+    this.threeDService.deleteFile(result.filePath).catch(() => {
+      // Ignore cleanup errors
+    });
+  }
+
+  @Post('extract')
+  @ApiOperation({
+    summary: 'Extract textures, animations, or materials from 3D model',
+    description:
+      'Extracts textures (as ZIP), animations (as JSON), or materials (as JSON) from GLB/GLTF files.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file', 'extractType'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: '3D model file (GLB/GLTF, max 200MB)',
+        },
+        extractType: {
+          type: 'string',
+          enum: Object.values(ExtractType),
+          description:
+            'Type of data to extract (textures, animations, materials)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Data extracted successfully',
+    type: Buffer,
+  })
+  async extract3DData(
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const parts = request.parts();
+    let fileBuffer: Buffer | null = null;
+    let filename = 'model';
+    const fields: Record<string, string> = {};
+
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        const chunks: Buffer[] = [];
+        for await (const chunk of part.file) {
+          if (chunk instanceof Buffer) {
+            chunks.push(chunk);
+          } else {
+            const arrayBuffer = await (chunk as Blob).arrayBuffer();
+            chunks.push(Buffer.from(arrayBuffer));
+          }
+        }
+        fileBuffer = Buffer.concat(chunks);
+        filename = part.filename || 'model';
+      } else if (part.type === 'field') {
+        fields[part.fieldname] = part.value as string;
+      }
+    }
+
+    if (!fileBuffer) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    const dto = new Extract3DDataDto();
+    dto.extractType = fields.extractType as ExtractType;
+
+    if (!dto.extractType) {
+      throw new BadRequestException('Extract type is required');
+    }
+
+    const result = await this.threeDService.extract3DData(
+      fileBuffer,
+      filename,
+      dto,
+    );
+    const buffer = await this.threeDService.getFileBuffer(result.filePath);
+
+    reply.header('Content-Type', result.mimeType);
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename="${result.filename}"`,
+    );
+    reply.header('Content-Length', buffer.length.toString());
+    reply.send(buffer);
+
     this.threeDService.deleteFile(result.filePath).catch(() => {
       // Ignore cleanup errors
     });

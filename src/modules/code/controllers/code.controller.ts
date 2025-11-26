@@ -8,7 +8,7 @@ import {
 import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { FormatCodeDto } from '../dtos/format-code.dto';
+import { FormatCodeDto, CodeLanguage } from '../dtos/format-code.dto';
 import { CodeService } from '../services/code.service';
 
 /**
@@ -62,15 +62,7 @@ export class CodeController {
 
     for await (const part of parts) {
       if (part.type === 'file') {
-        const chunks: Buffer[] = [];
-        for await (const chunk of part.file) {
-          chunks.push(
-            chunk instanceof Buffer
-              ? chunk
-              : Buffer.from(await (chunk as Blob).arrayBuffer()),
-          );
-        }
-        fileBuffer = Buffer.concat(chunks);
+        fileBuffer = await part.toBuffer(); // Clean, safe, properly typed
       } else if (part.type === 'field') {
         fields[part.fieldname] = part.value as string;
       }
@@ -81,7 +73,7 @@ export class CodeController {
     }
 
     const dto = new FormatCodeDto();
-    dto.language = fields.language as any;
+    dto.language = fields.language as CodeLanguage | undefined;
     dto.outputFormat = fields.outputFormat;
 
     const result = await this.codeService.formatCode(fileBuffer, dto);

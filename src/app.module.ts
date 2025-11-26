@@ -13,11 +13,13 @@ import { AppController } from './app.controller';
 import { ThreeDModule } from './modules/3d/3d.module';
 import { ArchivesModule } from './modules/archives/archives.module';
 import { CodeModule } from './modules/code/code.module';
+import { EbooksModule } from './modules/ebooks/ebooks.module';
 import { FilesModule } from './modules/files/files.module';
 import { ImagesModule } from './modules/images/images.module';
 import { MarkdownModule } from './modules/markdown/markdown.module';
 import { MediaModule } from './modules/media/media.module';
 import { OcrModule } from './modules/ocr/ocr.module';
+import { PresentationsModule } from './modules/presentations/presentations.module';
 import { QrModule } from './modules/qr/qr.module';
 import { TempFileCleanupService } from './utils/temp-file-cleanup.service';
 
@@ -85,6 +87,8 @@ import { TempFileCleanupService } from './utils/temp-file-cleanup.service';
     MediaModule,
     OcrModule,
     CodeModule,
+    PresentationsModule,
+    EbooksModule,
   ],
   controllers: [AppController],
   providers: [

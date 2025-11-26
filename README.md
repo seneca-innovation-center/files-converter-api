@@ -6,13 +6,19 @@ A production-ready, open-source NestJS backend for file conversion web applicati
 
 - **Image Conversion**: Convert images between formats (JPEG, PNG, WebP, AVIF, TIFF, BMP, SVG) with optional resizing, AI background removal, and SVG vectorization
 - **Document Conversion**: Convert documents between DOCX, PDF, TXT, HTML, XLSX, and CSV formats
+- **PDF Operations**: Merge multiple PDFs, split PDFs by pages, and fill PDF form fields
+- **Excel Chart Export**: Export Excel charts as PNG images using Chart.js
+- **Presentations**: Create PPTX presentations from structured data and convert PPTX to PDF or images (PNG/JPEG)
+- **Ebooks**: Create EPUB files from HTML/TXT content and convert EPUB to PDF, HTML, or TXT
 - **Video & Audio Conversion**: Convert video/audio files between MP4, WebM, AVI, MOV, MP3, WAV, OGG, FLAC, and more with FFmpeg
+- **Video Enhancements**: Generate thumbnails, trim videos, merge multiple videos, extract frames, and handle subtitles (extract/embed)
 - **QR Codes & Barcodes**: Generate QR codes and barcodes (CODE128, EAN13, UPC, etc.) with customizable colors and sizes
 - **Archive Management**: Create and extract ZIP, TAR, and TAR.GZ archives
 - **Markdown Conversion**: Convert Markdown to HTML or PDF, and HTML to Markdown
 - **OCR Text Extraction**: Extract text from images using Tesseract OCR in multiple languages
 - **Code Formatting**: Format and syntax-highlight code files (JavaScript, Python, Java, etc.)
-- **3D Model Conversion**: Convert 3D models (GLB/GLTF) with optimization and compression support
+- **3D Model Conversion**: Convert 3D models (GLB, GLTF, OBJ, USDZ, FBX, STL, PLY) with optimization and compression support
+- **3D Model Data Extraction**: Extract textures, animations, and materials from 3D models
 - **Rate Limiting**: Built-in rate limiting to prevent abuse
 - **Automatic Cleanup**: Temporary files are automatically cleaned up after 15 minutes
 - **OpenAPI Documentation**: Swagger UI available at `/api/docs`
@@ -23,14 +29,16 @@ A production-ready, open-source NestJS backend for file conversion web applicati
 - **Framework**: NestJS with Fastify adapter
 - **Language**: TypeScript
 - **Image Processing**: Sharp, @imgly/background-removal-node, potrace (SVG tracing)
-- **Document Processing**: mammoth (DOCX), pdf-parse v2 (PDF extraction), pdf-lib, pdfkit (PDF generation), xlsx (Excel), html-pdf-node, docx (DOCX generation)
+- **Document Processing**: mammoth (DOCX), pdf-parse v2 (PDF extraction), pdf-lib (PDF manipulation), pdfkit (PDF generation), xlsx (Excel), html-pdf-node, docx (DOCX generation), exceljs (Excel charts), chartjs-node-canvas (Chart rendering)
+- **Presentations**: pptxgenjs (PPTX creation), libreoffice-convert (PPTX conversion)
+- **Ebooks**: epub-gen (EPUB creation), epub-parser (EPUB reading)
 - **Media Processing**: fluent-ffmpeg, @ffmpeg-installer/ffmpeg
 - **QR & Barcode**: qrcode, jsbarcode, canvas
 - **Archives**: archiver, unzipper, tar-stream
 - **Markdown**: marked, turndown
 - **OCR**: tesseract.js
 - **Code**: prettier, highlight.js
-- **3D Processing**: @gltf-transform/core, @gltf-transform/functions
+- **3D Processing**: @gltf-transform/core, @gltf-transform/functions, @gltf-transform/extensions, draco3dgltf
 - **Validation**: class-validator, class-transformer
 - **Rate Limiting**: @nestjs/throttler
 - **Documentation**: Swagger/OpenAPI
@@ -79,6 +87,12 @@ docker build -t files-converter-api .
 docker run -p 3001:3001 files-converter-api
 ```
 
+**Note**: For PPTX conversion features, you need LibreOffice installed. Update your Dockerfile:
+
+```dockerfile
+RUN apt-get update && apt-get install -y libreoffice && rm -rf /var/lib/apt/lists/*
+```
+
 ## API Endpoints
 
 ### Image Conversion
@@ -113,11 +127,24 @@ Convert a 3D model to a different format with optional optimization.
 **Request**: `multipart/form-data`
 
 - `file` (required): 3D model file - GLB/GLTF (max 200MB)
-- `format` (required): Target format (`glb`, `obj`, `usdz`)
+- `format` (required): Target format (`glb`, `gltf`, `obj`, `usdz`, `fbx`, `stl`, `ply`)
 - `optimize` (optional): Apply optimization (boolean)
 - `compress` (optional): Apply Draco compression for GLB (boolean)
 
+**Supported Formats**: GLB, GLTF, OBJ, USDZ, FBX, STL, PLY
+
 **Response**: Converted 3D model file as download
+
+**POST** `/api/3d/extract`
+
+Extract textures, animations, or materials from 3D models.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): 3D model file (GLB/GLTF)
+- `extractType` (required): Type of data to extract (`textures`, `animations`, `materials`)
+
+**Response**: JSON file with extracted data metadata
 
 ### Document Conversion
 
@@ -161,6 +188,54 @@ Convert documents between various formats with actual content conversion (not ju
 
 **Note**: PDF to DOCX conversion extracts text and recreates document structure. Complex layouts, images, and tables may not be perfectly preserved.
 
+**POST** `/api/files/pdf/merge`
+
+Merge multiple PDF files into one.
+
+**Request**: `multipart/form-data`
+
+- `files` (required): Multiple PDF files to merge (in order)
+
+**Response**: Merged PDF file
+
+**POST** `/api/files/pdf/split`
+
+Split a PDF file by pages.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): PDF file to split
+- `splitFrom` (optional): Page number to split from (1-indexed)
+- `splitTo` (optional): Page number to split to (1-indexed)
+- `splitAt` (optional): Split at specific page numbers (comma-separated, e.g., "5,10,15")
+
+**Response**: Split PDF file(s) - returns a single PDF with selected pages, or multiple PDFs if splitAt is used
+
+**POST** `/api/files/pdf/fill-form`
+
+Fill PDF form fields with provided data.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): PDF file with form fields
+- `formData` (required): Form field values as JSON string (e.g., `{"name": "John Doe", "email": "john@example.com"}`)
+
+**Response**: Filled PDF file (form is flattened/non-editable)
+
+**POST** `/api/files/excel/export-chart`
+
+Export Excel chart as PNG image.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Excel file with charts
+- `sheetName` (optional): Sheet name (defaults to first sheet)
+- `chartIndex` (optional): Chart index (defaults to 0)
+
+**Response**: PNG image of the chart
+
+**Note**: Extracts numeric data from the worksheet and creates a chart visualization using Chart.js. Works best with structured data tables.
+
 ### Video & Audio Conversion
 
 **POST** `/api/media/convert`
@@ -194,6 +269,71 @@ Extract audio track from a video file.
 - `format` (required): Audio format (mp3, wav, aac, flac)
 
 **Response**: Extracted audio file as download
+
+**POST** `/api/media/thumbnail`
+
+Generate a thumbnail from a video file.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Video file
+- `time` (optional): Time in seconds to capture thumbnail (default: 0)
+- `format` (optional): Output format (png, jpeg, default: png)
+
+**Response**: Thumbnail image file
+
+**POST** `/api/media/trim`
+
+Trim/cut a video between specified times.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Video file
+- `startTime` (required): Start time in seconds
+- `endTime` (required): End time in seconds
+- `targetFormat` (optional): Target format (default: mp4)
+
+**Response**: Trimmed video file
+
+**POST** `/api/media/merge`
+
+Merge multiple video files into one.
+
+**Request**: `multipart/form-data`
+
+- `files` (required): Multiple video files to merge (in order)
+
+**Response**: Merged video file
+
+**POST** `/api/media/extract-frame`
+
+Extract a single frame from a video.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Video file
+- `time` (optional): Time in seconds to extract frame
+- `frameNumber` (optional): Frame number to extract (alternative to time)
+- `format` (optional): Output format (png, jpeg, default: png)
+
+**Response**: Extracted frame image
+
+**POST** `/api/media/subtitles`
+
+Extract subtitles from a video or embed subtitles into a video.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Video file
+- `operation` (required): Operation type (`extract` or `embed`)
+- `subtitleFile` (optional): Subtitle file for embedding (SRT, VTT, ASS)
+- `subtitleText` (optional): Subtitle text content for embedding
+- `format` (optional): Subtitle format (srt, vtt, ass, default: srt)
+
+**Response**:
+
+- For extract: Subtitle file (SRT/VTT/ASS)
+- For embed: Video file with embedded subtitles
 
 ### QR Codes & Barcodes
 
@@ -316,6 +456,75 @@ Format and/or syntax-highlight code files.
 
 **Response**: Formatted code file or HTML page
 
+### Presentations API
+
+**POST** `/api/presentations/create`
+
+Create a PPTX presentation from structured data.
+
+**Request**: `application/json`
+
+```json
+{
+  "title": "My Presentation",
+  "slides": [
+    {
+      "title": "Slide 1",
+      "content": "Slide content",
+      "bullets": ["Point 1", "Point 2"]
+    }
+  ]
+}
+```
+
+**Response**: PPTX file as download
+
+**POST** `/api/presentations/convert`
+
+Convert PPTX to PDF or images.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): PPTX file (max 200MB)
+- `targetFormat` (required): Target format (`pdf`, `png`, `jpeg`)
+
+**Response**:
+
+- For PDF: Single PDF file
+- For PNG/JPEG: Single image if one slide, ZIP file with all slide images if multiple slides
+
+**Note**: Requires LibreOffice to be installed on the server. For Docker, add `RUN apt-get update && apt-get install -y libreoffice` to your Dockerfile.
+
+### Ebooks API
+
+**POST** `/api/ebooks/create`
+
+Create an EPUB ebook from HTML or TXT content.
+
+**Request**: `application/json`
+
+```json
+{
+  "title": "My Ebook",
+  "author": "Author Name",
+  "content": "<h1>Chapter 1</h1><p>Content here...</p>",
+  "sourceFormat": "html"
+}
+```
+
+**Response**: EPUB file as download
+
+**POST** `/api/ebooks/convert`
+
+Convert EPUB to PDF, HTML, or TXT.
+
+**Request**: `multipart/form-data`
+
+- `file` (required): EPUB file (max 200MB)
+- `targetFormat` (required): Target format (`pdf`, `html`, `txt`)
+
+**Response**: Converted file as download
+
 ## Rate Limiting
 
 The API has rate limiting enabled:
@@ -361,13 +570,29 @@ npm run format
 - **DOCX Reading**: Mammoth library for Word document parsing
 - **PDF Reading**: pdf-parse v2 with PDFParse class for text extraction
 - **PDF Generation**: PDFKit and html-pdf-node for creating PDFs
-- **Excel Processing**: xlsx library for spreadsheet operations
+- **PDF Operations**: pdf-lib for merging, splitting, and form filling
+- **Excel Processing**: xlsx and exceljs libraries for spreadsheet operations
+- **Excel Charts**: chartjs-node-canvas for chart rendering
 - **DOCX Generation**: docx library for creating Word documents
+
+### Presentation Processing
+
+- **PPTX Creation**: pptxgenjs for generating PPTX files from structured data
+- **PPTX Conversion**: libreoffice-convert (requires LibreOffice installed) for converting PPTX to PDF/images
+
+### Ebook Processing
+
+- **EPUB Creation**: epub-gen for generating EPUB files from HTML/TXT
+- **EPUB Reading**: epub-parser for parsing and converting EPUB files
 
 ### Best Practices
 
 - SVG conversion works best with high-contrast, simple images (logos, icons, line art)
 - PDF to DOCX conversion extracts text only; complex layouts may not be preserved
+- Excel chart export extracts numeric data from worksheets and creates visualizations; works best with structured tables
+- PPTX conversion requires LibreOffice to be installed on the server (included in Dockerfile)
+- EPUB conversion preserves text content but may not maintain complex formatting
+- Video operations (trim, merge, subtitles) require FFmpeg (included via @ffmpeg-installer/ffmpeg)
 - Large files (>5MB) are supported but may take longer to process
 - All temporary files are automatically cleaned up after 15 minutes
 
@@ -455,6 +680,107 @@ curl -X POST http://localhost:3001/api/ocr/extract \
   -F "file=@document.jpg" \
   -F "language=eng" \
   --output extracted.txt
+```
+
+### Merge PDFs
+
+```bash
+curl -X POST http://localhost:3001/api/files/pdf/merge \
+  -F "files=@file1.pdf" \
+  -F "files=@file2.pdf" \
+  --output merged.pdf
+```
+
+### Split PDF
+
+```bash
+curl -X POST http://localhost:3001/api/files/pdf/split \
+  -F "file=@document.pdf" \
+  -F "splitFrom=1" \
+  -F "splitTo=10" \
+  --output split.pdf
+```
+
+### Fill PDF Form
+
+```bash
+curl -X POST http://localhost:3001/api/files/pdf/fill-form \
+  -F "file=@form.pdf" \
+  -F "formData={\"name\":\"John Doe\",\"email\":\"john@example.com\"}" \
+  --output filled.pdf
+```
+
+### Export Excel Chart
+
+```bash
+curl -X POST http://localhost:3001/api/files/excel/export-chart \
+  -F "file=@spreadsheet.xlsx" \
+  -F "sheetName=Sheet1" \
+  --output chart.png
+```
+
+### Create PPTX Presentation
+
+```bash
+curl -X POST http://localhost:3001/api/presentations/create \
+  -H "Content-Type: application/json" \
+  -d '{"title":"My Presentation","slides":[{"title":"Slide 1","content":"Content"}]}' \
+  --output presentation.pptx
+```
+
+### Convert PPTX to PDF
+
+```bash
+curl -X POST http://localhost:3001/api/presentations/convert \
+  -F "file=@presentation.pptx" \
+  -F "targetFormat=pdf" \
+  --output presentation.pdf
+```
+
+### Create EPUB
+
+```bash
+curl -X POST http://localhost:3001/api/ebooks/create \
+  -H "Content-Type: application/json" \
+  -d '{"title":"My Book","author":"Author","content":"<h1>Chapter 1</h1>","sourceFormat":"html"}' \
+  --output book.epub
+```
+
+### Convert EPUB to PDF
+
+```bash
+curl -X POST http://localhost:3001/api/ebooks/convert \
+  -F "file=@book.epub" \
+  -F "targetFormat=pdf" \
+  --output book.pdf
+```
+
+### Generate Video Thumbnail
+
+```bash
+curl -X POST http://localhost:3001/api/media/thumbnail \
+  -F "file=@video.mp4" \
+  -F "time=5" \
+  --output thumbnail.png
+```
+
+### Trim Video
+
+```bash
+curl -X POST http://localhost:3001/api/media/trim \
+  -F "file=@video.mp4" \
+  -F "startTime=10" \
+  -F "endTime=60" \
+  --output trimmed.mp4
+```
+
+### Extract 3D Model Data
+
+```bash
+curl -X POST http://localhost:3001/api/3d/extract \
+  -F "file=@model.glb" \
+  -F "extractType=textures" \
+  --output textures.json
 ```
 
 ## License

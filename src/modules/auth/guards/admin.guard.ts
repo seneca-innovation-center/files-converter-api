@@ -6,6 +6,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { FastifyRequest } from 'fastify';
 
 import { AuthService } from '../services/auth.service';
 
@@ -20,7 +21,7 @@ export class AdminGuard implements CanActivate {
    * @returns
    */
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+    const request: FastifyRequest = context.switchToHttp().getRequest();
     const token = this.extractTokenFromHeader(request);
 
     if (!token) {
@@ -45,7 +46,9 @@ export class AdminGuard implements CanActivate {
    * @param request The request object
    * @returns The extracted token or undefined if it couldn't be extracted
    */
-  private extractTokenFromHeader(request: any): string | undefined {
+  private extractTokenFromHeader(request: {
+    headers: { authorization?: string };
+  }): string | undefined {
     const [type, token] = request.headers.authorization?.split(' ') ?? [];
     return type === 'Bearer' ? token : undefined;
   }
