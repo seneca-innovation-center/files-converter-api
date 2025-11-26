@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
@@ -12,7 +13,7 @@ import * as sharp from 'sharp';
 
 import { ConvertImageDto, ImageFormat } from '../dtos/convert-image.dto';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+const ImageTracer = require('imagetracerjs');
 const potrace = require('potrace');
 
 /**
@@ -185,6 +186,7 @@ export class ImagesService {
         convertedBuffer = await this.convertToSvg(
           sharpInstance,
           processedBuffer,
+          dto.colorVectorization || false,
         );
       } else {
         // Convert to buffer for other formats
@@ -271,21 +273,39 @@ export class ImagesService {
 
   /**
    * Converts an image to SVG format using image tracing.
+   * Supports both black-and-white (potrace) and color (imagetracerjs) vectorization.
    * @param sharpInstance Sharp instance with applied transformations
    * @param _originalBuffer Original buffer for fallback
+   * @param useColorVectorization If true, uses color vectorization; if false, uses black and white
    * @returns SVG buffer
    */
   private async convertToSvg(
     sharpInstance: sharp.Sharp,
     _originalBuffer: Buffer,
+    useColorVectorization: boolean,
   ): Promise<Buffer> {
+    if (useColorVectorization) {
+      // Use imagetracerjs for color vectorization
+      return this.convertToSvgColor(sharpInstance);
+    } else {
+      // Use potrace for black and white vectorization
+      return this.convertToSvgBw(sharpInstance);
+    }
+  }
+
+  /**
+   * Converts an image to SVG using potrace (black and white vectorization).
+   * @param sharpInstance Sharp instance with applied transformations
+   * @returns SVG buffer
+   */
+  private async convertToSvgBw(sharpInstance: sharp.Sharp): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       // First, convert to PNG for potrace processing
       sharpInstance
         .png()
         .toBuffer()
         .then((pngBuffer) => {
-          // Trace the image to SVG using potrace
+          // Trace the image to SVG using potrace (black and white)
           potrace.trace(pngBuffer, (err: Error | null, svg: string) => {
             if (err) {
               reject(
@@ -306,6 +326,68 @@ export class ImagesService {
           );
         });
     });
+  }
+
+  /**
+   * Converts an image to SVG using imagetracerjs (color vectorization).
+   * @param sharpInstance Sharp instance with applied transformations
+   * @returns SVG buffer
+   */
+  private async convertToSvgColor(sharpInstance: sharp.Sharp): Promise<Buffer> {
+    try {
+      // Convert to raw RGBA buffer for ImageData format
+      // ImageData needs RGBA values as a Uint8ClampedArray
+      const rawBuffer = await sharpInstance
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      // Convert buffer to ImageData format (RGBA array)
+      // ImageData expects a Uint8ClampedArray with RGBA values
+      const imageData: {
+        width: number;
+        height: number;
+        data: Uint8ClampedArray;
+      } = {
+        width: rawBuffer.info.width,
+        height: rawBuffer.info.height,
+        data: new Uint8ClampedArray(rawBuffer.data),
+      };
+
+      // Vectorize with color preservation
+      const options = {
+        colorsampling: 2, // Color sampling: 0=no, 1=random, 2=dominant
+        numberofcolors: 256, // Number of colors to use
+        colorquantcycles: 3, // Color quantization cycles
+        minpathsegments: 1, // Minimum path segments
+        ltres: 1, // Line threshold
+        qtres: 1, // Quadratic threshold
+        pathomit: 0, // Path omit
+        rightangleenhance: true, // Right angle enhancement
+        blurradius: 0, // Blur radius
+        blurdelta: 20, // Blur delta
+        strokewidth: 0, // Stroke width
+        linefilter: false, // Line filter
+        scale: 1, // Scale
+        roundcoords: 1, // Round coordinates
+        viewbox: true, // Include viewBox
+        desc: false, // Include description
+        lcpr: 0, // Line compare precision
+        qcpr: 0, // Quadratic compare precision
+      };
+
+      // imagetracerjs converts ImageData to SVG
+      const svgString = ImageTracer.imagedataToSVG(
+        imageData,
+        options,
+      ) as string;
+
+      return Buffer.from(svgString, 'utf-8');
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Color SVG vectorization failed: ' + (error as Error).message,
+      );
+    }
   }
 
   /**
