@@ -20,6 +20,7 @@ import {
   TrimVideoDto,
   ExtractFrameDto,
   SubtitleOperationDto,
+  TranscribeVideoDto,
 } from '../dtos/video-operations.dto';
 import { MediaService } from '../services/media.service';
 
@@ -508,6 +509,79 @@ export class MediaController {
     dto.format = (fields.format as 'srt' | 'vtt' | 'ass') || 'srt';
 
     const result = await this.mediaService.handleSubtitles(fileBuffer, dto);
+    const buffer = await this.mediaService.getFileBuffer(result.filePath);
+
+    reply
+      .header('Content-Type', result.mimeType)
+      .header(
+        'Content-Disposition',
+        `attachment; filename="${result.filename}"`,
+      )
+      .header('Content-Length', buffer.length.toString())
+      .send(buffer);
+
+    this.mediaService.deleteFile(result.filePath).catch(() => {});
+  }
+
+  @Post('transcribe')
+  @ApiOperation({
+    summary: 'Transcribe video to text using speech recognition',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Video file to transcribe',
+        },
+        language: {
+          type: 'string',
+          description:
+            'Language code (e.g., en, fr, es). Auto-detect if not provided',
+        },
+        outputFormat: {
+          type: 'string',
+          enum: ['txt', 'srt', 'vtt', 'json'],
+          description: 'Output format (default: txt)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Video transcribed successfully',
+    type: Buffer,
+  })
+  async transcribeVideo(
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const parts = request.parts();
+    let fileBuffer: Buffer | null = null;
+    const fields: Record<string, string> = {};
+
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        fileBuffer = await part.toBuffer();
+      } else if (part.type === 'field') {
+        fields[part.fieldname] = part.value as string;
+      }
+    }
+
+    if (!fileBuffer) {
+      throw new BadRequestException('No video file uploaded');
+    }
+
+    const dto = new TranscribeVideoDto();
+    dto.language = fields.language;
+    dto.outputFormat =
+      (fields.outputFormat as 'txt' | 'srt' | 'vtt' | 'json') || 'txt';
+
+    const result = await this.mediaService.transcribeVideo(fileBuffer, dto);
     const buffer = await this.mediaService.getFileBuffer(result.filePath);
 
     reply

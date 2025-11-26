@@ -14,6 +14,7 @@ import {
   TrimVideoDto,
   ExtractFrameDto,
   SubtitleOperationDto,
+  TranscribeVideoDto,
 } from '../dtos/video-operations.dto';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -596,6 +597,146 @@ export class MediaService {
         // Ignore
       }
     }
+  }
+
+  /**
+   * Transcribes video to text using speech recognition
+   */
+  async transcribeVideo(
+    fileBuffer: Buffer,
+    dto: TranscribeVideoDto,
+  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const inputPath = join(this.tmpDir, `input_${timestamp}_${randomString}`);
+
+    try {
+      await fs.writeFile(inputPath, fileBuffer);
+
+      // First, extract audio from video
+      const audioPath = join(
+        this.tmpDir,
+        `audio_${timestamp}_${randomString}.wav`,
+      );
+
+      // Extract audio using FFmpeg
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(inputPath)
+          .audioCodec('pcm_s16le')
+          .audioFrequency(16000) // Whisper works best with 16kHz
+          .audioChannels(1) // Mono
+          .format('wav')
+          .output(audioPath)
+          .on('end', () => resolve())
+          .on('error', (err) => reject(err))
+          .run();
+      });
+
+      // Use whisper-node for transcription
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const whisperModule = require('whisper-node');
+      // whisper-node exports both named and default, use default or named export
+      const whisper =
+        whisperModule.default || whisperModule.whisper || whisperModule;
+      // whisper-node returns: [{start: "00:00:14.310", end: "00:00:16.480", speech: "text"}]
+
+      if (typeof whisper !== 'function') {
+        throw new Error(
+          'whisper-node is not properly installed or models are missing. Run: npx whisper-node download',
+        );
+      }
+
+      // Transcribe audio
+      // Note: whisper-node requires models to be downloaded first via: npx whisper-node download
+      const result = (await whisper(audioPath, {
+        modelName: 'base', // Use base model (can be 'tiny', 'base', 'small', 'medium', 'large')
+      })) as Array<{
+        start: string;
+        end: string;
+        speech: string;
+      }>;
+
+      // Clean up audio file
+      await this.deleteFile(audioPath);
+
+      // Format output based on requested format
+      const outputFormat = dto.outputFormat || 'txt';
+      let outputContent: string;
+      let filename: string;
+      let mimeType: string;
+
+      if (outputFormat === 'json') {
+        outputContent = JSON.stringify(result, null, 2);
+        filename = `transcription_${timestamp}_${randomString}.json`;
+        mimeType = 'application/json';
+      } else if (outputFormat === 'srt') {
+        outputContent = this.formatAsSrt(result);
+        filename = `transcription_${timestamp}_${randomString}.srt`;
+        mimeType = 'text/plain';
+      } else if (outputFormat === 'vtt') {
+        outputContent = this.formatAsVtt(result);
+        filename = `transcription_${timestamp}_${randomString}.vtt`;
+        mimeType = 'text/vtt';
+      } else {
+        // Default: plain text
+        outputContent = result.map((segment) => segment.speech).join(' ');
+        filename = `transcription_${timestamp}_${randomString}.txt`;
+        mimeType = 'text/plain';
+      }
+
+      const filePath = join(this.tmpDir, filename);
+      await fs.writeFile(filePath, outputContent);
+
+      return {
+        filePath,
+        filename,
+        mimeType,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Video transcription failed: ' + (error as Error).message,
+      );
+    } finally {
+      try {
+        await fs.unlink(inputPath);
+      } catch (_error) {
+        // Ignore
+      }
+    }
+  }
+
+  /**
+   * Formats transcription result as SRT subtitle format
+   * whisper-node returns timestamps as strings in format "HH:MM:SS.mmm"
+   */
+  private formatAsSrt(
+    segments: Array<{ start: string; end: string; speech: string }>,
+  ): string {
+    return segments
+      .map((segment, index) => {
+        // Convert whisper format (HH:MM:SS.mmm) to SRT format (HH:MM:SS,mmm)
+        const startTime = segment.start.replace('.', ',');
+        const endTime = segment.end.replace('.', ',');
+        return `${index + 1}\n${startTime} --> ${endTime}\n${segment.speech}\n`;
+      })
+      .join('\n');
+  }
+
+  /**
+   * Formats transcription result as VTT subtitle format
+   * whisper-node returns timestamps as strings in format "HH:MM:SS.mmm"
+   */
+  private formatAsVtt(
+    segments: Array<{ start: string; end: string; speech: string }>,
+  ): string {
+    const header = 'WEBVTT\n\n';
+    const content = segments
+      .map((segment) => {
+        // VTT uses same format as whisper (HH:MM:SS.mmm)
+        return `${segment.start} --> ${segment.end}\n${segment.speech}\n`;
+      })
+      .join('\n');
+    return header + content;
   }
 
   async deleteFile(filePath: string): Promise<void> {

@@ -11,7 +11,7 @@ A production-ready, open-source NestJS backend for file conversion web applicati
 - **Presentations**: Create PPTX presentations from structured data and convert PPTX to PDF or images (PNG/JPEG)
 - **Ebooks**: Create EPUB files from HTML/TXT content and convert EPUB to PDF, HTML, or TXT
 - **Video & Audio Conversion**: Convert video/audio files between MP4, WebM, AVI, MOV, MP3, WAV, OGG, FLAC, and more with FFmpeg
-- **Video Enhancements**: Generate thumbnails, trim videos, merge multiple videos, extract frames, and handle subtitles (extract/embed)
+- **Video Enhancements**: Generate thumbnails, trim videos, merge multiple videos, extract frames, handle subtitles (extract/embed), and transcribe videos to text
 - **QR Codes & Barcodes**: Generate QR codes and barcodes (CODE128, EAN13, UPC, etc.) with customizable colors and sizes
 - **Archive Management**: Create and extract ZIP, TAR, and TAR.GZ archives
 - **Markdown Conversion**: Convert Markdown to HTML or PDF, and HTML to Markdown
@@ -32,7 +32,7 @@ A production-ready, open-source NestJS backend for file conversion web applicati
 - **Document Processing**: mammoth (DOCX), pdf-parse v2 (PDF extraction), pdf-lib (PDF manipulation), pdfkit (PDF generation), xlsx (Excel), html-pdf-node, docx (DOCX generation), exceljs (Excel charts), chartjs-node-canvas (Chart rendering)
 - **Presentations**: pptxgenjs (PPTX creation), libreoffice-convert (PPTX conversion)
 - **Ebooks**: epub-gen (EPUB creation), epub-parser (EPUB reading)
-- **Media Processing**: fluent-ffmpeg, @ffmpeg-installer/ffmpeg
+- **Media Processing**: fluent-ffmpeg, @ffmpeg-installer/ffmpeg, whisper-node (video transcription)
 - **QR & Barcode**: qrcode, jsbarcode, canvas
 - **Archives**: archiver, unzipper, tar-stream
 - **Markdown**: marked, turndown
@@ -335,6 +335,27 @@ Extract subtitles from a video or embed subtitles into a video.
 - For extract: Subtitle file (SRT/VTT/ASS)
 - For embed: Video file with embedded subtitles
 
+**POST** `/api/media/transcribe`
+
+Transcribe video to text using speech recognition (OpenAI Whisper).
+
+**Request**: `multipart/form-data`
+
+- `file` (required): Video file
+- `language` (optional): Language code for transcription (e.g., `en`, `fr`, `es`). Auto-detects if not provided
+- `outputFormat` (optional): Output format (`txt`, `srt`, `vtt`, `json`, default: `txt`)
+
+**Response**: Transcription file in the requested format
+
+**Supported Output Formats**:
+
+- `txt`: Plain text transcription (default)
+- `srt`: Subtitle format with timestamps
+- `vtt`: WebVTT format with timestamps
+- `json`: Structured JSON with timestamps and text segments
+
+**Note**: Requires Whisper models to be downloaded first. Run `npx whisper-node download` to download the model (recommended: `base` model for multi-language support).
+
 ### QR Codes & Barcodes
 
 **POST** `/api/qr/generate`
@@ -592,7 +613,8 @@ npm run format
 - Excel chart export extracts numeric data from worksheets and creates visualizations; works best with structured tables
 - PPTX conversion requires LibreOffice to be installed on the server (included in Dockerfile)
 - EPUB conversion preserves text content but may not maintain complex formatting
-- Video operations (trim, merge, subtitles) require FFmpeg (included via @ffmpeg-installer/ffmpeg)
+- Video operations (trim, merge, subtitles, transcription) require FFmpeg (included via @ffmpeg-installer/ffmpeg)
+- Video transcription requires Whisper models to be downloaded: run `npx whisper-node download` and select a model (recommended: `base` for multi-language support)
 - Large files (>5MB) are supported but may take longer to process
 - All temporary files are automatically cleaned up after 15 minutes
 
@@ -781,6 +803,29 @@ curl -X POST http://localhost:3001/api/3d/extract \
   -F "file=@model.glb" \
   -F "extractType=textures" \
   --output textures.json
+```
+
+### Transcribe Video to Text
+
+```bash
+# Transcribe to plain text
+curl -X POST http://localhost:3001/api/media/transcribe \
+  -F "file=@video.mp4" \
+  -F "language=en" \
+  -F "outputFormat=txt" \
+  --output transcription.txt
+
+# Transcribe to SRT subtitle format
+curl -X POST http://localhost:3001/api/media/transcribe \
+  -F "file=@video.mp4" \
+  -F "outputFormat=srt" \
+  --output transcription.srt
+
+# Transcribe to JSON with timestamps
+curl -X POST http://localhost:3001/api/media/transcribe \
+  -F "file=@video.mp4" \
+  -F "outputFormat=json" \
+  --output transcription.json
 ```
 
 ## License
