@@ -138,7 +138,7 @@ export class ImagesService {
       }
 
       // Convert to target format
-      const formatOptions: Record<string, any> = {};
+      const formatOptions: { quality?: number } = {};
       if (
         dto.quality &&
         (dto.format === ImageFormat.JPEG || dto.format === ImageFormat.WEBP)

@@ -11,7 +11,7 @@ import {
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as dotenv from 'dotenv';
-import { Server, ServerOptions } from 'socket.io';
+import { Server, ServerOptions, Socket } from 'socket.io';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -36,9 +36,9 @@ export class SocketAdapter extends IoAdapter {
     port: number,
     options?: ServerOptions & {
       namespace?: string;
-      server?: any;
+      server?: unknown;
     },
-  ): any {
+  ): Server {
     // Parse comma-separated list of allowed origins from environment variable
     const origins = process.env.BASE_URL
       ? process.env.BASE_URL.split(',').map((url) => url.trim())
@@ -59,7 +59,7 @@ export class SocketAdapter extends IoAdapter {
    * @param server The server to bind the callback to.
    * @param callback The callback to be invoked when a client connects.
    */
-  bindClientConnect(server: Server, callback: (socket: any) => void): void {
+  bindClientConnect(server: Server, callback: (socket: Socket) => void): void {
     server.on('connection', callback);
   }
 }

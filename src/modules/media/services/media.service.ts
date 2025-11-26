@@ -1,11 +1,20 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as ffmpeg from 'fluent-ffmpeg';
 
 import { ConvertMediaDto } from '../dtos/convert-media.dto';
+import {
+  TrimVideoDto,
+  ExtractFrameDto,
+  SubtitleOperationDto,
+} from '../dtos/video-operations.dto';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
@@ -239,6 +248,354 @@ export class MediaService {
 
   async getFileBuffer(filePath: string): Promise<Buffer> {
     return fs.readFile(filePath);
+  }
+
+  /**
+   * Generates thumbnail from video (first frame)
+   */
+  async generateThumbnail(
+    fileBuffer: Buffer,
+    timeInSeconds: number = 0,
+  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const inputPath = join(this.tmpDir, `input_${timestamp}_${randomString}`);
+    const filename = `thumbnail_${timestamp}_${randomString}.png`;
+    const outputPath = join(this.tmpDir, filename);
+
+    try {
+      await fs.writeFile(inputPath, fileBuffer);
+
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(inputPath)
+          .seekInput(timeInSeconds)
+          .frames(1)
+          .outputOptions('-vf', 'scale=320:-1') // Resize to 320px width
+          .output(outputPath)
+          .on('end', () => resolve())
+          .on('error', (err) => reject(err))
+          .run();
+      });
+
+      return {
+        filePath: outputPath,
+        filename,
+        mimeType: 'image/png',
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Thumbnail generation failed: ' + (error as Error).message,
+      );
+    } finally {
+      try {
+        await fs.unlink(inputPath);
+      } catch (_error) {
+        // Ignore
+      }
+    }
+  }
+
+  /**
+   * Trims/cuts video
+   */
+  async trimVideo(
+    fileBuffer: Buffer,
+    dto: TrimVideoDto,
+  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const inputPath = join(this.tmpDir, `input_${timestamp}_${randomString}`);
+    const filename = `trimmed_${timestamp}_${randomString}.mp4`;
+    const outputPath = join(this.tmpDir, filename);
+
+    try {
+      await fs.writeFile(inputPath, fileBuffer);
+
+      const duration = dto.endTime - dto.startTime;
+
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(inputPath)
+          .seekInput(dto.startTime)
+          .duration(duration)
+          .output(outputPath)
+          .on('end', () => resolve())
+          .on('error', (err) => reject(err))
+          .run();
+      });
+
+      return {
+        filePath: outputPath,
+        filename,
+        mimeType: 'video/mp4',
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Video trimming failed: ' + (error as Error).message,
+      );
+    } finally {
+      try {
+        await fs.unlink(inputPath);
+      } catch (_error) {
+        // Ignore
+      }
+    }
+  }
+
+  /**
+   * Merges multiple videos
+   */
+  async mergeVideos(
+    videoBuffers: Buffer[],
+  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const inputPaths: string[] = [];
+    const concatFilePath = join(
+      this.tmpDir,
+      `concat_${timestamp}_${randomString}.txt`,
+    );
+    const filename = `merged_${timestamp}_${randomString}.mp4`;
+    const outputPath = join(this.tmpDir, filename);
+
+    try {
+      // Write all input files
+      for (let i = 0; i < videoBuffers.length; i++) {
+        const inputPath = join(
+          this.tmpDir,
+          `input_${timestamp}_${i}_${randomString}`,
+        );
+        await fs.writeFile(inputPath, videoBuffers[i]);
+        inputPaths.push(inputPath);
+      }
+
+      // Create concat file for FFmpeg
+      const concatContent = inputPaths
+        .map((path) => `file '${path}'`)
+        .join('\n');
+      await fs.writeFile(concatFilePath, concatContent);
+
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg()
+          .input(concatFilePath)
+          .inputOptions(['-f', 'concat', '-safe', '0'])
+          .outputOptions(['-c', 'copy'])
+          .output(outputPath)
+          .on('end', () => resolve())
+          .on('error', (err) => reject(err))
+          .run();
+      });
+
+      // Clean up input files and concat file
+      for (const inputPath of inputPaths) {
+        try {
+          await fs.unlink(inputPath);
+        } catch (_error) {
+          // Ignore
+        }
+      }
+      try {
+        await fs.unlink(concatFilePath);
+      } catch (_error) {
+        // Ignore
+      }
+
+      return {
+        filePath: outputPath,
+        filename,
+        mimeType: 'video/mp4',
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Video merging failed: ' + (error as Error).message,
+      );
+    }
+  }
+
+  /**
+   * Extracts frame from video
+   */
+  async extractFrame(
+    fileBuffer: Buffer,
+    dto: ExtractFrameDto,
+  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const inputPath = join(this.tmpDir, `input_${timestamp}_${randomString}`);
+    const format = dto.format || 'png';
+    const filename = `frame_${timestamp}_${randomString}.${format}`;
+    const outputPath = join(this.tmpDir, filename);
+
+    try {
+      await fs.writeFile(inputPath, fileBuffer);
+
+      await new Promise<void>((resolve, reject) => {
+        const command = ffmpeg(inputPath);
+
+        if (dto.time !== undefined) {
+          command.seekInput(dto.time);
+        } else if (dto.frameNumber !== undefined) {
+          // Approximate: assume 30fps, can be improved with metadata
+          const time = dto.frameNumber / 30;
+          command.seekInput(time);
+        } else {
+          command.seekInput(0); // Default to first frame
+        }
+
+        command
+          .frames(1)
+          .output(outputPath)
+          .on('end', () => resolve())
+          .on('error', (err) => reject(err))
+          .run();
+      });
+
+      return {
+        filePath: outputPath,
+        filename,
+        mimeType: format === 'png' ? 'image/png' : 'image/jpeg',
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Frame extraction failed: ' + (error as Error).message,
+      );
+    } finally {
+      try {
+        await fs.unlink(inputPath);
+      } catch (_error) {
+        // Ignore
+      }
+    }
+  }
+
+  /**
+   * Extracts or embeds subtitles
+   */
+  async handleSubtitles(
+    fileBuffer: Buffer,
+    dto: SubtitleOperationDto,
+  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const inputPath = join(this.tmpDir, `input_${timestamp}_${randomString}`);
+
+    try {
+      await fs.writeFile(inputPath, fileBuffer);
+
+      if (dto.operation === 'extract') {
+        // Check if video has subtitle streams
+        const hasSubtitles = await new Promise<boolean>((resolve) => {
+          ffmpeg(inputPath).ffprobe((err, data) => {
+            if (err) {
+              resolve(false);
+              return;
+            }
+            // Check for subtitle streams
+            const subtitleStreams =
+              data?.streams?.filter(
+                (stream) => stream.codec_type === 'subtitle',
+              ) || [];
+            resolve(subtitleStreams.length > 0);
+          });
+        });
+
+        if (!hasSubtitles) {
+          throw new BadRequestException(
+            'No subtitle streams found in the video file. The video does not contain embedded subtitles.',
+          );
+        }
+
+        // Extract subtitles
+        const format = dto.format || 'srt';
+        const filename = `subtitles_${timestamp}_${randomString}.${format}`;
+        const outputPath = join(this.tmpDir, filename);
+
+        await new Promise<void>((resolve, reject) => {
+          ffmpeg(inputPath)
+            .outputOptions(['-map', '0:s:0']) // Extract first subtitle stream
+            .output(outputPath)
+            .on('end', () => resolve())
+            .on('error', (err) => reject(err))
+            .run();
+        });
+
+        return {
+          filePath: outputPath,
+          filename,
+          mimeType: format === 'srt' ? 'text/plain' : 'text/vtt',
+        };
+      } else {
+        // Embed subtitles
+        if (!dto.subtitleFile && !dto.subtitleText) {
+          throw new BadRequestException(
+            'Subtitle file or text is required for embedding',
+          );
+        }
+
+        const filename = `with_subtitles_${timestamp}_${randomString}.mp4`;
+        const outputPath = join(this.tmpDir, filename);
+        let subtitlePath: string | undefined;
+
+        if (dto.subtitleFile) {
+          subtitlePath = join(
+            this.tmpDir,
+            `subtitle_${timestamp}_${randomString}.srt`,
+          );
+          // subtitleFile is a Buffer from the controller
+          const subtitleBuffer = Buffer.isBuffer(dto.subtitleFile)
+            ? dto.subtitleFile
+            : Buffer.from(dto.subtitleFile as unknown as Uint8Array);
+          await fs.writeFile(subtitlePath, subtitleBuffer);
+        } else if (dto.subtitleText) {
+          subtitlePath = join(
+            this.tmpDir,
+            `subtitle_${timestamp}_${randomString}.srt`,
+          );
+          await fs.writeFile(subtitlePath, dto.subtitleText);
+        }
+
+        await new Promise<void>((resolve, reject) => {
+          const command = ffmpeg(inputPath);
+          if (subtitlePath) {
+            command
+              .outputOptions(['-vf', `subtitles=${subtitlePath}`])
+              .output(outputPath)
+              .on('end', () => resolve())
+              .on('error', (err) => reject(err))
+              .run();
+          } else {
+            reject(new Error('Subtitle path not set'));
+          }
+        });
+
+        // Clean up subtitle file
+        if (subtitlePath) {
+          try {
+            await fs.unlink(subtitlePath);
+          } catch (_error) {
+            // Ignore
+          }
+        }
+
+        return {
+          filePath: outputPath,
+          filename,
+          mimeType: 'video/mp4',
+        };
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Subtitle operation failed: ' + (error as Error).message,
+      );
+    } finally {
+      try {
+        await fs.unlink(inputPath);
+      } catch (_error) {
+        // Ignore
+      }
+    }
   }
 
   async deleteFile(filePath: string): Promise<void> {

@@ -8,14 +8,18 @@
 
 1. [Images API](#images-api)
 2. [Documents API](#documents-api)
-3. [3D Models API](#3d-models-api)
-4. [Video & Audio API](#video--audio-api)
-5. [QR Codes & Barcodes API](#qr-codes--barcodes-api)
-6. [Archives API](#archives-api)
-7. [Markdown API](#markdown-api)
-8. [OCR API](#ocr-api)
-9. [Code Formatting API](#code-formatting-api)
-10. [TypeScript Types](#typescript-types)
+3. [PDF Operations API](#pdf-operations-api)
+4. [Excel Operations API](#excel-operations-api)
+5. [Presentations API](#presentations-api)
+6. [Ebooks API](#ebooks-api)
+7. [3D Models API](#3d-models-api)
+8. [Video & Audio API](#video--audio-api)
+9. [QR Codes & Barcodes API](#qr-codes--barcodes-api)
+10. [Archives API](#archives-api)
+11. [Markdown API](#markdown-api)
+12. [OCR API](#ocr-api)
+13. [Code Formatting API](#code-formatting-api)
+14. [TypeScript Types](#typescript-types)
 
 ---
 
@@ -65,6 +69,155 @@ const response = await fetch('http://localhost:3001/api/images/convert', {
 
 const blob = await response.blob();
 const url = URL.createObjectURL(blob);
+```
+
+---
+
+## PDF Operations API
+
+### POST `/api/files/pdf/merge`
+
+Merge multiple PDF files into one.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  files: File[]; // Multiple PDF files to merge (in order)
+}
+```
+
+**Response**: Binary merged PDF file
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('files', pdfFile1);
+formData.append('files', pdfFile2);
+formData.append('files', pdfFile3);
+
+const response = await fetch('http://localhost:3001/api/files/pdf/merge', {
+  method: 'POST',
+  body: formData,
+});
+
+const blob = await response.blob();
+```
+
+### POST `/api/files/pdf/split`
+
+Split a PDF file by pages.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File;              // PDF file to split
+  splitFrom?: number;      // Page number to split from (1-indexed)
+  splitTo?: number;        // Page number to split to (1-indexed)
+  splitAt?: string;        // Split at specific page numbers (comma-separated, e.g., "5,10,15")
+}
+```
+
+**Response**: Binary PDF file with selected pages
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('file', pdfFile);
+formData.append('splitFrom', '1');
+formData.append('splitTo', '10');
+
+const response = await fetch('http://localhost:3001/api/files/pdf/split', {
+  method: 'POST',
+  body: formData,
+});
+```
+
+### POST `/api/files/pdf/fill-form`
+
+Fill PDF form fields with provided data.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File; // PDF file with form fields
+  formData: string; // Form field values as JSON string
+}
+```
+
+**Response**: Binary PDF file with filled form (flattened/non-editable)
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('file', pdfFile);
+formData.append(
+  'formData',
+  JSON.stringify({
+    name: 'John Doe',
+    email: 'john@example.com',
+    age: '30',
+  }),
+);
+
+const response = await fetch('http://localhost:3001/api/files/pdf/fill-form', {
+  method: 'POST',
+  body: formData,
+});
+```
+
+---
+
+## Excel Operations API
+
+### POST `/api/files/excel/export-chart`
+
+Export Excel chart as PNG image.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File;              // Excel file with charts
+  sheetName?: string;      // Sheet name (optional, defaults to first sheet)
+  chartIndex?: number;     // Chart index (defaults to 0)
+}
+```
+
+**Response**: PNG image of the chart
+
+**Note**: Extracts numeric data from the worksheet and creates a chart visualization using Chart.js. Works best with structured data tables.
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('file', excelFile);
+formData.append('sheetName', 'Sheet1');
+formData.append('chartIndex', '0');
+
+const response = await fetch(
+  'http://localhost:3001/api/files/excel/export-chart',
+  {
+    method: 'POST',
+    body: formData,
+  },
+);
+
+const blob = await response.blob();
 ```
 
 ---
@@ -128,6 +281,167 @@ const blob = await response.blob();
 
 ---
 
+## Presentations API
+
+### POST `/api/presentations/create`
+
+Create a PPTX presentation from structured data.
+
+**Request Type**: `application/json`
+
+**Parameters**:
+
+```typescript
+{
+  title: string; // Title of the presentation
+  slides: Array<{
+    title: string; // Slide title
+    content?: string; // Main content (optional)
+    bullets?: string[]; // Bullet points (optional)
+  }>;
+}
+```
+
+**Response**: Binary PPTX file
+
+**Example**:
+
+```typescript
+const response = await fetch('http://localhost:3001/api/presentations/create', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    title: 'My Presentation',
+    slides: [
+      {
+        title: 'Introduction',
+        content: 'Welcome to the presentation',
+      },
+      {
+        title: 'Features',
+        bullets: ['Feature 1', 'Feature 2', 'Feature 3'],
+      },
+    ],
+  }),
+});
+
+const blob = await response.blob();
+```
+
+### POST `/api/presentations/convert`
+
+Convert PPTX to PDF or images.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File; // PPTX file (max 200MB)
+  targetFormat: 'pdf' | 'png' | 'jpeg';
+}
+```
+
+**Response**:
+
+- For PDF: Single PDF file
+- For PNG/JPEG: Single image if one slide, ZIP file with all slide images if multiple slides
+
+**Note**: Requires LibreOffice to be installed on the server.
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('file', pptxFile);
+formData.append('targetFormat', 'pdf');
+
+const response = await fetch(
+  'http://localhost:3001/api/presentations/convert',
+  {
+    method: 'POST',
+    body: formData,
+  },
+);
+
+const blob = await response.blob();
+```
+
+---
+
+## Ebooks API
+
+### POST `/api/ebooks/create`
+
+Create an EPUB ebook from HTML or TXT content.
+
+**Request Type**: `application/json`
+
+**Parameters**:
+
+```typescript
+{
+  title: string; // Title of the ebook
+  author: string; // Author name
+  content: string; // Content in HTML or plain text
+  sourceFormat: 'html' | 'txt'; // Input format
+}
+```
+
+**Response**: Binary EPUB file
+
+**Example**:
+
+```typescript
+const response = await fetch('http://localhost:3001/api/ebooks/create', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    title: 'My Awesome Ebook',
+    author: 'John Doe',
+    content: '<h1>Chapter 1</h1><p>This is the content.</p>',
+    sourceFormat: 'html',
+  }),
+});
+
+const blob = await response.blob();
+```
+
+### POST `/api/ebooks/convert`
+
+Convert EPUB to PDF, HTML, or TXT.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File; // EPUB file (max 200MB)
+  targetFormat: 'pdf' | 'html' | 'txt';
+}
+```
+
+**Response**: Binary converted file
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('file', epubFile);
+formData.append('targetFormat', 'pdf');
+
+const response = await fetch('http://localhost:3001/api/ebooks/convert', {
+  method: 'POST',
+  body: formData,
+});
+
+const blob = await response.blob();
+```
+
+---
+
 ## 3D Models API
 
 ### POST `/api/3d/convert`
@@ -150,7 +464,7 @@ Convert 3D models with optional optimization.
 **Supported Formats**:
 
 ```typescript
-type ThreeDFormat = 'glb' | 'gltf' | 'obj' | 'usdz';
+type ThreeDFormat = 'glb' | 'gltf' | 'obj' | 'usdz' | 'fbx' | 'stl' | 'ply';
 ```
 
 **Response**: Binary 3D model file
@@ -168,6 +482,39 @@ const response = await fetch('http://localhost:3001/api/3d/convert', {
   method: 'POST',
   body: formData,
 });
+```
+
+### POST `/api/3d/extract`
+
+Extract textures, animations, or materials from 3D models.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File; // 3D model file (GLB/GLTF)
+  extractType: 'textures' | 'animations' | 'materials';
+}
+```
+
+**Response**: JSON file with extracted data metadata
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('file', glbFile);
+formData.append('extractType', 'textures');
+
+const response = await fetch('http://localhost:3001/api/3d/extract', {
+  method: 'POST',
+  body: formData,
+});
+
+const result = await response.json();
+// Contains texture metadata (URI, MIME type, etc.)
 ```
 
 ---
@@ -248,6 +595,183 @@ formData.append('format', 'mp3');
 const response = await fetch('http://localhost:3001/api/media/extract-audio', {
   method: 'POST',
   body: formData,
+});
+```
+
+### POST `/api/media/thumbnail`
+
+Generate a thumbnail from a video file.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File;                    // Video file
+  time?: number;                  // Time in seconds to capture thumbnail (default: 0)
+  format?: 'png' | 'jpeg';       // Output format (default: png)
+}
+```
+
+**Response**: Binary thumbnail image
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('file', videoFile);
+formData.append('time', '5');
+formData.append('format', 'png');
+
+const response = await fetch('http://localhost:3001/api/media/thumbnail', {
+  method: 'POST',
+  body: formData,
+});
+```
+
+### POST `/api/media/trim`
+
+Trim/cut a video between specified times.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File;                    // Video file
+  startTime: number;             // Start time in seconds
+  endTime: number;               // End time in seconds
+  targetFormat?: string;         // Target format (default: mp4)
+}
+```
+
+**Response**: Binary trimmed video file
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('file', videoFile);
+formData.append('startTime', '10');
+formData.append('endTime', '60');
+
+const response = await fetch('http://localhost:3001/api/media/trim', {
+  method: 'POST',
+  body: formData,
+});
+```
+
+### POST `/api/media/merge`
+
+Merge multiple video files into one.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  files: File[];                  // Multiple video files to merge (in order)
+}
+```
+
+**Response**: Binary merged video file
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('files', videoFile1);
+formData.append('files', videoFile2);
+formData.append('files', videoFile3);
+
+const response = await fetch('http://localhost:3001/api/media/merge', {
+  method: 'POST',
+  body: formData,
+});
+```
+
+### POST `/api/media/extract-frame`
+
+Extract a single frame from a video.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File;                    // Video file
+  time?: number;                 // Time in seconds to extract frame
+  frameNumber?: number;          // Frame number to extract (alternative to time)
+  format?: 'png' | 'jpeg';       // Output format (default: png)
+}
+```
+
+**Response**: Binary frame image
+
+**Example**:
+
+```typescript
+const formData = new FormData();
+formData.append('file', videoFile);
+formData.append('time', '5.5');
+formData.append('format', 'png');
+
+const response = await fetch('http://localhost:3001/api/media/extract-frame', {
+  method: 'POST',
+  body: formData,
+});
+```
+
+### POST `/api/media/subtitles`
+
+Extract subtitles from a video or embed subtitles into a video.
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File;                    // Video file
+  operation: 'extract' | 'embed'; // Operation type
+  subtitleFile?: File;           // Subtitle file for embedding (SRT, VTT, ASS)
+  subtitleText?: string;         // Subtitle text content for embedding
+  format?: 'srt' | 'vtt' | 'ass'; // Subtitle format (default: srt)
+}
+```
+
+**Response**:
+
+- For extract: Subtitle file (SRT/VTT/ASS)
+- For embed: Video file with embedded subtitles
+
+**Example**:
+
+```typescript
+// Extract subtitles
+const formData = new FormData();
+formData.append('file', videoFile);
+formData.append('operation', 'extract');
+formData.append('format', 'srt');
+
+const response = await fetch('http://localhost:3001/api/media/subtitles', {
+  method: 'POST',
+  body: formData,
+});
+
+// Embed subtitles
+const formData2 = new FormData();
+formData2.append('file', videoFile);
+formData2.append('subtitleFile', subtitleFile);
+formData2.append('operation', 'embed');
+
+const response2 = await fetch('http://localhost:3001/api/media/subtitles', {
+  method: 'POST',
+  body: formData2,
 });
 ```
 
@@ -682,13 +1206,25 @@ export interface DocumentConvertRequest {
 // 3D MODEL TYPES
 // ============================================
 
-export type ThreeDFormat = 'glb' | 'gltf' | 'obj' | 'usdz';
+export type ThreeDFormat =
+  | 'glb'
+  | 'gltf'
+  | 'obj'
+  | 'usdz'
+  | 'fbx'
+  | 'stl'
+  | 'ply';
 
 export interface ThreeDConvertRequest {
   file: File;
   format: ThreeDFormat;
   optimize?: boolean;
   compress?: boolean;
+}
+
+export interface Extract3DDataRequest {
+  file: File;
+  extractType: 'textures' | 'animations' | 'materials';
 }
 
 // ============================================
@@ -840,6 +1376,113 @@ export interface FormatCodeRequest {
   language?: CodeLanguage;
   outputFormat?: 'formatted' | 'html';
 }
+
+// ============================================
+// PDF OPERATIONS TYPES
+// ============================================
+
+export interface MergePdfRequest {
+  files: File[];
+}
+
+export interface SplitPdfRequest {
+  file: File;
+  splitFrom?: number;
+  splitTo?: number;
+  splitAt?: string; // Comma-separated page numbers
+}
+
+export interface FillPdfFormRequest {
+  file: File;
+  formData: string; // JSON string
+}
+
+// ============================================
+// EXCEL OPERATIONS TYPES
+// ============================================
+
+export interface ExportExcelChartRequest {
+  file: File;
+  sheetName?: string;
+  chartIndex?: number;
+}
+
+// ============================================
+// PRESENTATIONS TYPES
+// ============================================
+
+export type PresentationTargetFormat = 'pdf' | 'png' | 'jpeg';
+
+export interface SlideData {
+  title: string;
+  content?: string;
+  bullets?: string[];
+}
+
+export interface CreatePresentationRequest {
+  title: string;
+  slides: SlideData[];
+}
+
+export interface ConvertPresentationRequest {
+  file: File;
+  targetFormat: PresentationTargetFormat;
+}
+
+// ============================================
+// EBOOKS TYPES
+// ============================================
+
+export type EbookTargetFormat = 'pdf' | 'html' | 'txt';
+export type EbookSourceFormat = 'html' | 'txt';
+
+export interface CreateEbookRequest {
+  title: string;
+  author: string;
+  content: string;
+  sourceFormat: EbookSourceFormat;
+}
+
+export interface ConvertEbookRequest {
+  file: File;
+  targetFormat: EbookTargetFormat;
+}
+
+// ============================================
+// VIDEO ENHANCEMENT TYPES
+// ============================================
+
+export interface GenerateThumbnailRequest {
+  file: File;
+  time?: number;
+  format?: 'png' | 'jpeg';
+}
+
+export interface TrimVideoRequest {
+  file: File;
+  startTime: number;
+  endTime: number;
+  targetFormat?: string;
+}
+
+export interface MergeVideosRequest {
+  files: File[];
+}
+
+export interface ExtractFrameRequest {
+  file: File;
+  time?: number;
+  frameNumber?: number;
+  format?: 'png' | 'jpeg';
+}
+
+export interface SubtitleOperationRequest {
+  file: File;
+  operation: 'extract' | 'embed';
+  subtitleFile?: File;
+  subtitleText?: string;
+  format?: 'srt' | 'vtt' | 'ass';
+}
 ```
 
 ---
@@ -956,6 +1599,229 @@ export class FileConverterAPI {
       return await response.json();
     }
     return await response.text();
+  }
+
+  // PDF Operations
+  static async mergePdfs(request: MergePdfRequest): Promise<Blob> {
+    const formData = new FormData();
+    request.files.forEach((file) => formData.append('files', file));
+
+    const response = await fetch(`${API_BASE_URL}/files/pdf/merge`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('PDF merge failed');
+    return await response.blob();
+  }
+
+  static async splitPdf(request: SplitPdfRequest): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    if (request.splitFrom)
+      formData.append('splitFrom', request.splitFrom.toString());
+    if (request.splitTo) formData.append('splitTo', request.splitTo.toString());
+    if (request.splitAt) formData.append('splitAt', request.splitAt);
+
+    const response = await fetch(`${API_BASE_URL}/files/pdf/split`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('PDF split failed');
+    return await response.blob();
+  }
+
+  static async fillPdfForm(request: FillPdfFormRequest): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    formData.append('formData', request.formData);
+
+    const response = await fetch(`${API_BASE_URL}/files/pdf/fill-form`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('PDF form filling failed');
+    return await response.blob();
+  }
+
+  // Excel Operations
+  static async exportExcelChart(
+    request: ExportExcelChartRequest,
+  ): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    if (request.sheetName) formData.append('sheetName', request.sheetName);
+    if (request.chartIndex !== undefined)
+      formData.append('chartIndex', request.chartIndex.toString());
+
+    const response = await fetch(`${API_BASE_URL}/files/excel/export-chart`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('Excel chart export failed');
+    return await response.blob();
+  }
+
+  // Presentations
+  static async createPresentation(
+    request: CreatePresentationRequest,
+  ): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/presentations/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) throw new Error('Presentation creation failed');
+    return await response.blob();
+  }
+
+  static async convertPresentation(
+    request: ConvertPresentationRequest,
+  ): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    formData.append('targetFormat', request.targetFormat);
+
+    const response = await fetch(`${API_BASE_URL}/presentations/convert`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('Presentation conversion failed');
+    return await response.blob();
+  }
+
+  // Ebooks
+  static async createEbook(request: CreateEbookRequest): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/ebooks/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) throw new Error('EPUB creation failed');
+    return await response.blob();
+  }
+
+  static async convertEbook(request: ConvertEbookRequest): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    formData.append('targetFormat', request.targetFormat);
+
+    const response = await fetch(`${API_BASE_URL}/ebooks/convert`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('Ebook conversion failed');
+    return await response.blob();
+  }
+
+  // 3D Model Extraction
+  static async extract3DData(request: Extract3DDataRequest): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    formData.append('extractType', request.extractType);
+
+    const response = await fetch(`${API_BASE_URL}/3d/extract`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('3D data extraction failed');
+    return await response.blob();
+  }
+
+  // Video Enhancements
+  static async generateThumbnail(
+    request: GenerateThumbnailRequest,
+  ): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    if (request.time !== undefined)
+      formData.append('time', request.time.toString());
+    if (request.format) formData.append('format', request.format);
+
+    const response = await fetch(`${API_BASE_URL}/media/thumbnail`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('Thumbnail generation failed');
+    return await response.blob();
+  }
+
+  static async trimVideo(request: TrimVideoRequest): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    formData.append('startTime', request.startTime.toString());
+    formData.append('endTime', request.endTime.toString());
+    if (request.targetFormat)
+      formData.append('targetFormat', request.targetFormat);
+
+    const response = await fetch(`${API_BASE_URL}/media/trim`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('Video trimming failed');
+    return await response.blob();
+  }
+
+  static async mergeVideos(request: MergeVideosRequest): Promise<Blob> {
+    const formData = new FormData();
+    request.files.forEach((file) => formData.append('files', file));
+
+    const response = await fetch(`${API_BASE_URL}/media/merge`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('Video merging failed');
+    return await response.blob();
+  }
+
+  static async extractFrame(request: ExtractFrameRequest): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    if (request.time !== undefined)
+      formData.append('time', request.time.toString());
+    if (request.frameNumber !== undefined)
+      formData.append('frameNumber', request.frameNumber.toString());
+    if (request.format) formData.append('format', request.format);
+
+    const response = await fetch(`${API_BASE_URL}/media/extract-frame`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('Frame extraction failed');
+    return await response.blob();
+  }
+
+  static async handleSubtitles(
+    request: SubtitleOperationRequest,
+  ): Promise<Blob> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    formData.append('operation', request.operation);
+    if (request.subtitleFile)
+      formData.append('subtitleFile', request.subtitleFile);
+    if (request.subtitleText)
+      formData.append('subtitleText', request.subtitleText);
+    if (request.format) formData.append('format', request.format);
+
+    const response = await fetch(`${API_BASE_URL}/media/subtitles`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('Subtitle operation failed');
+    return await response.blob();
   }
 
   // Archives
@@ -1122,13 +1988,375 @@ function ImageConverter() {
 
 ---
 
+## 🆕 New Features for Frontend Integration
+
+### What's New in Version 2.0.0
+
+The following new endpoints and features have been added. Update your frontend to take advantage of these capabilities:
+
+#### 1. PDF Operations (New Endpoints)
+
+**Endpoints to Add**:
+
+- `POST /api/files/pdf/merge` - Merge multiple PDFs
+- `POST /api/files/pdf/split` - Split PDF by pages
+- `POST /api/files/pdf/fill-form` - Fill PDF form fields
+
+**Frontend Integration**:
+
+```typescript
+// Merge PDFs
+const mergedPdf = await FileConverterAPI.mergePdfs({
+  files: [pdf1, pdf2, pdf3],
+});
+
+// Split PDF
+const splitPdf = await FileConverterAPI.splitPdf({
+  file: pdfFile,
+  splitFrom: 1,
+  splitTo: 10,
+});
+
+// Fill PDF Form
+const filledPdf = await FileConverterAPI.fillPdfForm({
+  file: formPdf,
+  formData: JSON.stringify({ name: 'John', email: 'john@example.com' }),
+});
+```
+
+#### 2. Excel Chart Export (New Endpoint)
+
+**Endpoint to Add**:
+
+- `POST /api/files/excel/export-chart` - Export Excel chart as PNG
+
+**Frontend Integration**:
+
+```typescript
+const chartImage = await FileConverterAPI.exportExcelChart({
+  file: excelFile,
+  sheetName: 'Sheet1',
+  chartIndex: 0,
+});
+```
+
+#### 3. Presentations API (New Module)
+
+**Endpoints to Add**:
+
+- `POST /api/presentations/create` - Create PPTX from data
+- `POST /api/presentations/convert` - Convert PPTX to PDF/images
+
+**Frontend Integration**:
+
+```typescript
+// Create PPTX
+const pptx = await FileConverterAPI.createPresentation({
+  title: 'My Presentation',
+  slides: [
+    { title: 'Slide 1', content: 'Content here' },
+    { title: 'Slide 2', bullets: ['Point 1', 'Point 2'] },
+  ],
+});
+
+// Convert PPTX to PDF
+const pdf = await FileConverterAPI.convertPresentation({
+  file: pptxFile,
+  targetFormat: 'pdf',
+});
+```
+
+**Important**: PPTX conversion requires LibreOffice on the server. Check server setup.
+
+#### 4. Ebooks API (New Module)
+
+**Endpoints to Add**:
+
+- `POST /api/ebooks/create` - Create EPUB from HTML/TXT
+- `POST /api/ebooks/convert` - Convert EPUB to PDF/HTML/TXT
+
+**Frontend Integration**:
+
+```typescript
+// Create EPUB
+const epub = await FileConverterAPI.createEbook({
+  title: 'My Book',
+  author: 'Author Name',
+  content: '<h1>Chapter 1</h1><p>Content...</p>',
+  sourceFormat: 'html',
+});
+
+// Convert EPUB
+const pdf = await FileConverterAPI.convertEbook({
+  file: epubFile,
+  targetFormat: 'pdf',
+});
+```
+
+#### 5. Video Enhancements (New Endpoints)
+
+**Endpoints to Add**:
+
+- `POST /api/media/thumbnail` - Generate video thumbnail
+- `POST /api/media/trim` - Trim/cut video
+- `POST /api/media/merge` - Merge multiple videos
+- `POST /api/media/extract-frame` - Extract frame from video
+- `POST /api/media/subtitles` - Extract/embed subtitles
+
+**Frontend Integration**:
+
+```typescript
+// Generate thumbnail
+const thumbnail = await FileConverterAPI.generateThumbnail({
+  file: videoFile,
+  time: 5,
+  format: 'png',
+});
+
+// Trim video
+const trimmed = await FileConverterAPI.trimVideo({
+  file: videoFile,
+  startTime: 10,
+  endTime: 60,
+});
+
+// Merge videos
+const merged = await FileConverterAPI.mergeVideos({
+  files: [video1, video2, video3],
+});
+
+// Extract frame
+const frame = await FileConverterAPI.extractFrame({
+  file: videoFile,
+  time: 5.5,
+  format: 'png',
+});
+
+// Handle subtitles
+const subtitles = await FileConverterAPI.handleSubtitles({
+  file: videoFile,
+  operation: 'extract',
+  format: 'srt',
+});
+```
+
+#### 6. 3D Model Enhancements (New Endpoint)
+
+**Endpoint to Add**:
+
+- `POST /api/3d/extract` - Extract textures, animations, or materials
+
+**Updated Format Support**:
+
+- Added: `fbx`, `stl`, `ply` to existing `glb`, `gltf`, `obj`, `usdz`
+
+**Frontend Integration**:
+
+```typescript
+// Extract 3D data
+const textures = await FileConverterAPI.extract3DData({
+  file: glbFile,
+  extractType: 'textures',
+});
+
+// Returns JSON with texture metadata
+const json = await textures.text();
+const data = JSON.parse(json);
+```
+
+### TypeScript Types to Add
+
+Add these new types to your frontend TypeScript definitions:
+
+```typescript
+// PDF Operations
+export interface MergePdfRequest {
+  files: File[];
+}
+
+export interface SplitPdfRequest {
+  file: File;
+  splitFrom?: number;
+  splitTo?: number;
+  splitAt?: string;
+}
+
+export interface FillPdfFormRequest {
+  file: File;
+  formData: string; // JSON string
+}
+
+// Excel Operations
+export interface ExportExcelChartRequest {
+  file: File;
+  sheetName?: string;
+  chartIndex?: number;
+}
+
+// Presentations
+export interface CreatePresentationRequest {
+  title: string;
+  slides: Array<{
+    title: string;
+    content?: string;
+    bullets?: string[];
+  }>;
+}
+
+export interface ConvertPresentationRequest {
+  file: File;
+  targetFormat: 'pdf' | 'png' | 'jpeg';
+}
+
+// Ebooks
+export interface CreateEbookRequest {
+  title: string;
+  author: string;
+  content: string;
+  sourceFormat: 'html' | 'txt';
+}
+
+export interface ConvertEbookRequest {
+  file: File;
+  targetFormat: 'pdf' | 'html' | 'txt';
+}
+
+// Video Enhancements
+export interface GenerateThumbnailRequest {
+  file: File;
+  time?: number;
+  format?: 'png' | 'jpeg';
+}
+
+export interface TrimVideoRequest {
+  file: File;
+  startTime: number;
+  endTime: number;
+  targetFormat?: string;
+}
+
+export interface MergeVideosRequest {
+  files: File[];
+}
+
+export interface ExtractFrameRequest {
+  file: File;
+  time?: number;
+  frameNumber?: number;
+  format?: 'png' | 'jpeg';
+}
+
+export interface SubtitleOperationRequest {
+  file: File;
+  operation: 'extract' | 'embed';
+  subtitleFile?: File;
+  subtitleText?: string;
+  format?: 'srt' | 'vtt' | 'ass';
+}
+
+// 3D Model Extraction
+export interface Extract3DDataRequest {
+  file: File;
+  extractType: 'textures' | 'animations' | 'materials';
+}
+
+// Updated 3D Format
+export type ThreeDFormat =
+  | 'glb'
+  | 'gltf'
+  | 'obj'
+  | 'usdz'
+  | 'fbx'
+  | 'stl'
+  | 'ply';
+```
+
+### Migration Guide
+
+1. **Update API Client**: Add new methods to your `FileConverterAPI` class (see examples above)
+2. **Add Type Definitions**: Include new TypeScript types in your types file
+3. **Update UI Components**: Add UI for new features:
+   - PDF merge/split/fill-form buttons
+   - Excel chart export button
+   - Presentation creation form
+   - EPUB creation form
+   - Video enhancement controls (thumbnail, trim, merge, etc.)
+   - 3D data extraction options
+4. **Handle New Response Types**:
+   - PPTX to images may return ZIP for multi-slide presentations
+   - 3D extraction returns JSON files
+   - Subtitle extraction returns text files
+
+### Breaking Changes
+
+None. All existing endpoints remain unchanged. New features are additive.
+
+---
+
 ## Need Help?
 
 - **Swagger UI**: Visit `http://localhost:3001/api/docs` for interactive API documentation
 - **GitHub Issues**: Report bugs or request features
-- **Email**: support@yourapi.com
+- **Email**: mu
 
 ---
 
-**Last Updated**: 2024
+---
+
+## System Requirements
+
+### LibreOffice (Required for PPTX Conversion)
+
+The PPTX to PDF/Image conversion feature requires LibreOffice to be installed on the server.
+
+**Installation**:
+
+- **Ubuntu/Debian**: `apt-get update && apt-get install -y libreoffice`
+- **macOS**: `brew install libreoffice`
+- **Docker**: Add to Dockerfile:
+  ```dockerfile
+  RUN apt-get update && apt-get install -y libreoffice && rm -rf /var/lib/apt/lists/*
+  ```
+
+**Note**: Without LibreOffice, PPTX conversion endpoints will fail. The `createPresentation` endpoint (creating PPTX from data) does not require LibreOffice.
+
+---
+
+## New Features Summary
+
+### ✨ Recently Added Features
+
+1. **PDF Operations**:
+   - Merge multiple PDFs
+   - Split PDFs by pages
+   - Fill PDF form fields
+
+2. **Excel Chart Export**:
+   - Export Excel charts as PNG images
+   - Automatic chart generation from worksheet data
+
+3. **Presentations**:
+   - Create PPTX from structured data
+   - Convert PPTX to PDF or images (PNG/JPEG)
+
+4. **Ebooks**:
+   - Create EPUB from HTML/TXT
+   - Convert EPUB to PDF, HTML, or TXT
+
+5. **Video Enhancements**:
+   - Generate thumbnails
+   - Trim/cut videos
+   - Merge multiple videos
+   - Extract frames
+   - Extract/embed subtitles
+
+6. **3D Model Enhancements**:
+   - Extract textures metadata
+   - Extract animations metadata
+   - Extract materials metadata
+   - Support for FBX, STL, PLY formats
+
+---
+
+**Last Updated**: 2025
 **API Version**: 1.0.0

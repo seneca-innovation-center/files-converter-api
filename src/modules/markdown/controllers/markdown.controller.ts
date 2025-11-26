@@ -8,7 +8,10 @@ import {
 import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { ConvertMarkdownDto } from '../dtos/convert-markdown.dto';
+import {
+  ConvertMarkdownDto,
+  MarkdownFormat,
+} from '../dtos/convert-markdown.dto';
 import { MarkdownService } from '../services/markdown.service';
 
 /**
@@ -49,15 +52,9 @@ export class MarkdownController {
 
     for await (const part of parts) {
       if (part.type === 'file') {
-        const chunks: Buffer[] = [];
-        for await (const chunk of part.file) {
-          chunks.push(
-            chunk instanceof Buffer
-              ? chunk
-              : Buffer.from(await (chunk as Blob).arrayBuffer()),
-          );
-        }
-        fileBuffer = Buffer.concat(chunks);
+        // This is the correct, safe, and idiomatic way
+        fileBuffer = await part.toBuffer();
+        // Continue collecting fields even after file (in case fields come after)
       } else if (part.type === 'field') {
         fields[part.fieldname] = part.value as string;
       }
@@ -68,7 +65,7 @@ export class MarkdownController {
     }
 
     const dto = new ConvertMarkdownDto();
-    dto.targetFormat = fields.targetFormat as any;
+    dto.targetFormat = fields.targetFormat as MarkdownFormat;
 
     const result = await this.markdownService.convertMarkdown(fileBuffer, dto);
     const buffer = await this.markdownService.getFileBuffer(result.filePath);
@@ -82,6 +79,7 @@ export class MarkdownController {
 
     await reply.send(buffer);
 
+    // Clean up temp file
     this.markdownService.deleteFile(result.filePath).catch(() => {});
   }
 
@@ -109,16 +107,9 @@ export class MarkdownController {
 
     for await (const part of parts) {
       if (part.type === 'file') {
-        const chunks: Buffer[] = [];
-        for await (const chunk of part.file) {
-          chunks.push(
-            chunk instanceof Buffer
-              ? chunk
-              : Buffer.from(await (chunk as Blob).arrayBuffer()),
-          );
-        }
-        fileBuffer = Buffer.concat(chunks);
-        break;
+        // This is the official, safe, and correct way
+        fileBuffer = await part.toBuffer();
+        break; // Only handle the first file
       }
     }
 
@@ -138,6 +129,7 @@ export class MarkdownController {
 
     await reply.send(buffer);
 
+    // Clean up temp file
     this.markdownService.deleteFile(result.filePath).catch(() => {});
   }
 }
