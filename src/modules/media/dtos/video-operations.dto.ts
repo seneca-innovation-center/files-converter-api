@@ -105,3 +105,24 @@ export class SubtitleOperationDto {
   @IsOptional()
   operation?: string;
 }
+
+export class TranscribeVideoDto {
+  @ApiProperty({
+    description:
+      'Language code for transcription (e.g., en, fr, es). Auto-detect if not provided',
+    required: false,
+    example: 'en',
+  })
+  @IsString()
+  @IsOptional()
+  language?: string;
+
+  @ApiProperty({
+    description: 'Output format for transcription (txt, srt, vtt, json)',
+    required: false,
+    example: 'txt',
+  })
+  @IsString()
+  @IsOptional()
+  outputFormat?: 'txt' | 'srt' | 'vtt' | 'json';
+}

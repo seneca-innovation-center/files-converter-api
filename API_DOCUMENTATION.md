@@ -775,6 +775,76 @@ const response2 = await fetch('http://localhost:3001/api/media/subtitles', {
 });
 ```
 
+### POST `/api/media/transcribe`
+
+Transcribe video to text using speech recognition (OpenAI Whisper).
+
+**Request Type**: `multipart/form-data`
+
+**Parameters**:
+
+```typescript
+{
+  file: File;                              // Video file
+  language?: string;                        // Language code (e.g., 'en', 'fr', 'es'). Auto-detects if not provided
+  outputFormat?: 'txt' | 'srt' | 'vtt' | 'json'; // Output format (default: 'txt')
+}
+```
+
+**Supported Output Formats**:
+
+- `txt`: Plain text transcription (default)
+- `srt`: Subtitle format with timestamps
+- `vtt`: WebVTT format with timestamps
+- `json`: Structured JSON with timestamps and text segments
+
+**Response**: Transcription file in the requested format
+
+**Note**: Requires Whisper models to be downloaded first. Run `npx whisper-node download` to download the model (recommended: `base` model for multi-language support).
+
+**Example**:
+
+```typescript
+// Transcribe to plain text
+const formData = new FormData();
+formData.append('file', videoFile);
+formData.append('language', 'en');
+formData.append('outputFormat', 'txt');
+
+const response = await fetch('http://localhost:3001/api/media/transcribe', {
+  method: 'POST',
+  body: formData,
+});
+
+const blob = await response.blob();
+const text = await blob.text();
+
+// Transcribe to SRT subtitle format
+const formData2 = new FormData();
+formData2.append('file', videoFile);
+formData2.append('outputFormat', 'srt');
+
+const response2 = await fetch('http://localhost:3001/api/media/transcribe', {
+  method: 'POST',
+  body: formData2,
+});
+
+// Transcribe to JSON with timestamps
+const formData3 = new FormData();
+formData3.append('file', videoFile);
+formData3.append('outputFormat', 'json');
+
+const response3 = await fetch('http://localhost:3001/api/media/transcribe', {
+  method: 'POST',
+  body: formData3,
+});
+
+const jsonBlob = await response3.blob();
+const jsonText = await jsonBlob.text();
+const transcription = JSON.parse(jsonText);
+// Returns: [{ start: "00:00:14.310", end: "00:00:16.480", speech: "text" }]
+```
+
 ---
 
 ## QR Codes & Barcodes API
@@ -1483,6 +1553,18 @@ export interface SubtitleOperationRequest {
   subtitleText?: string;
   format?: 'srt' | 'vtt' | 'ass';
 }
+
+export interface TranscribeVideoRequest {
+  file: File;
+  language?: string; // Language code (e.g., 'en', 'fr', 'es')
+  outputFormat?: 'txt' | 'srt' | 'vtt' | 'json'; // Default: 'txt'
+}
+
+export interface TranscriptionSegment {
+  start: string; // Timestamp in format "HH:MM:SS.mmm"
+  end: string; // Timestamp in format "HH:MM:SS.mmm"
+  speech: string; // Transcribed text
+}
 ```
 
 ---
@@ -1824,6 +1906,32 @@ export class FileConverterAPI {
     return await response.blob();
   }
 
+  static async transcribeVideo(
+    request: TranscribeVideoRequest,
+  ): Promise<Blob | TranscriptionSegment[]> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    if (request.language) formData.append('language', request.language);
+    if (request.outputFormat)
+      formData.append('outputFormat', request.outputFormat);
+
+    const response = await fetch(`${API_BASE_URL}/media/transcribe`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error('Video transcription failed');
+
+    // If JSON format, parse and return array
+    if (request.outputFormat === 'json') {
+      const blob = await response.blob();
+      const text = await blob.text();
+      return JSON.parse(text) as TranscriptionSegment[];
+    }
+
+    return await response.blob();
+  }
+
   // Archives
   static async createArchive(request: CreateArchiveRequest): Promise<Blob> {
     const formData = new FormData();
@@ -2102,6 +2210,7 @@ const pdf = await FileConverterAPI.convertEbook({
 - `POST /api/media/merge` - Merge multiple videos
 - `POST /api/media/extract-frame` - Extract frame from video
 - `POST /api/media/subtitles` - Extract/embed subtitles
+- `POST /api/media/transcribe` - Transcribe video to text using speech recognition
 
 **Frontend Integration**:
 
@@ -2138,6 +2247,26 @@ const subtitles = await FileConverterAPI.handleSubtitles({
   operation: 'extract',
   format: 'srt',
 });
+
+// Transcribe video to text
+const transcription = await FileConverterAPI.transcribeVideo({
+  file: videoFile,
+  language: 'en',
+  outputFormat: 'txt',
+});
+
+// Transcribe to SRT format
+const srtSubtitles = await FileConverterAPI.transcribeVideo({
+  file: videoFile,
+  outputFormat: 'srt',
+});
+
+// Transcribe to JSON with timestamps
+const transcriptionData = (await FileConverterAPI.transcribeVideo({
+  file: videoFile,
+  outputFormat: 'json',
+})) as TranscriptionSegment[];
+// Returns: [{ start: "00:00:14.310", end: "00:00:16.480", speech: "text" }]
 ```
 
 #### 6. 3D Model Enhancements (New Endpoint)
@@ -2254,6 +2383,18 @@ export interface SubtitleOperationRequest {
   format?: 'srt' | 'vtt' | 'ass';
 }
 
+export interface TranscribeVideoRequest {
+  file: File;
+  language?: string; // Language code (e.g., 'en', 'fr', 'es')
+  outputFormat?: 'txt' | 'srt' | 'vtt' | 'json'; // Default: 'txt'
+}
+
+export interface TranscriptionSegment {
+  start: string; // Timestamp in format "HH:MM:SS.mmm"
+  end: string; // Timestamp in format "HH:MM:SS.mmm"
+  speech: string; // Transcribed text
+}
+
 // 3D Model Extraction
 export interface Extract3DDataRequest {
   file: File;
@@ -2320,6 +2461,24 @@ The PPTX to PDF/Image conversion feature requires LibreOffice to be installed on
 
 **Note**: Without LibreOffice, PPTX conversion endpoints will fail. The `createPresentation` endpoint (creating PPTX from data) does not require LibreOffice.
 
+### Whisper Models (Required for Video Transcription)
+
+The video transcription feature requires Whisper models to be downloaded first.
+
+**Installation**:
+
+```bash
+npx whisper-node download
+```
+
+When prompted, select a model:
+
+- **Recommended**: `base` - Good balance of speed and accuracy, supports multiple languages (142 MB disk, ~500 MB RAM)
+- **Fastest**: `tiny` or `tiny.en` - Faster processing, lower accuracy (75 MB disk, ~390 MB RAM)
+- **Best Accuracy**: `large` - Highest accuracy, slower processing (2.9 GB disk, ~4.7 GB RAM)
+
+**Note**: Without Whisper models, video transcription endpoints will fail. Models are stored locally and used for all transcription requests.
+
 ---
 
 ## New Features Summary
@@ -2349,6 +2508,7 @@ The PPTX to PDF/Image conversion feature requires LibreOffice to be installed on
    - Merge multiple videos
    - Extract frames
    - Extract/embed subtitles
+   - Transcribe videos to text (speech recognition)
 
 6. **3D Model Enhancements**:
    - Extract textures metadata
