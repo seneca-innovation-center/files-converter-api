@@ -712,9 +712,9 @@ export class MediaService {
   private formatAsSrt(
     segments: Array<{ start: string; end: string; speech: string }>,
   ): string {
-    return segments
+    const groupedSegments = this.groupSegmentsForSrt(segments, 3);
+    return groupedSegments
       .map((segment, index) => {
-        // Convert whisper format (HH:MM:SS.mmm) to SRT format (HH:MM:SS,mmm)
         const startTime = segment.start.replace('.', ',');
         const endTime = segment.end.replace('.', ',');
         return `${index + 1}\n${startTime} --> ${endTime}\n${segment.speech}\n`;
@@ -747,5 +747,52 @@ export class MediaService {
         throw error;
       }
     }
+  }
+
+  private groupSegmentsForSrt(
+    segments: Array<{ start: string; end: string; speech: string }>,
+    targetDurationSeconds: number,
+  ): Array<{ start: string; end: string; speech: string }> {
+    if (segments.length === 0) {
+      return [];
+    }
+
+    const grouped: Array<{ start: string; end: string; speech: string }> = [];
+    let current: { start: string; end: string; speech: string } | null = null;
+    let currentStartSeconds = 0;
+
+    for (const segment of segments) {
+      const segmentStartSeconds = this.timestampToSeconds(segment.start);
+      const segmentEndSeconds = this.timestampToSeconds(segment.end);
+
+      if (!current) {
+        current = { ...segment };
+        currentStartSeconds = segmentStartSeconds;
+      } else {
+        current.speech = `${current.speech} ${segment.speech}`.trim();
+        current.end = segment.end;
+      }
+
+      if (segmentEndSeconds - currentStartSeconds >= targetDurationSeconds) {
+        grouped.push(current);
+        current = null;
+      }
+    }
+
+    if (current) {
+      grouped.push(current);
+    }
+
+    return grouped;
+  }
+
+  private timestampToSeconds(timestamp: string): number {
+    const sanitized = timestamp.replace(',', '.');
+    const [hours, minutes, secondsPart] = sanitized.split(':');
+    const hoursNum = Number(hours) || 0;
+    const minutesNum = Number(minutes) || 0;
+    const secondsNum = Number(secondsPart) || 0;
+
+    return hoursNum * 3600 + minutesNum * 60 + secondsNum;
   }
 }
