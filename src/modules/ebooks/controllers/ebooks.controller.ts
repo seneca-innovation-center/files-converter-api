@@ -6,6 +6,7 @@ import {
   Res,
   BadRequestException,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -13,13 +14,17 @@ import {
   ApiConsumes,
   ApiBody,
   ApiResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import { CreateEbookDto } from '../dtos/convert-ebook.dto';
 import { ConvertEbookDto, EbookTargetFormat } from '../dtos/convert-ebook.dto';
 import { EbooksService } from '../services/ebooks.service';
 
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('ebooks')
 @Controller('ebooks')
 export class EbooksController {

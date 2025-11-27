@@ -5,6 +5,7 @@ import {
   Res,
   BadRequestException,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -12,8 +13,10 @@ import {
   ApiConsumes,
   ApiBody,
   ApiResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import { ConvertFileDto } from '../dtos/convert-file.dto';
 import { SplitPdfDto, FillPdfFormDto } from '../dtos/pdf-operations.dto';
@@ -23,6 +26,8 @@ import { FilesService } from '../services/files.service';
  * Controller for handling general file conversion endpoints.
  * Provides endpoints for converting files between various formats.
  */
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('files')
 @Controller('files')
 export class FilesController {

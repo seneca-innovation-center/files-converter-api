@@ -1,4 +1,5 @@
 import { CodeService } from '../modules/code/services/code.service';
+
 import { createConfigServiceMock } from './utils/config-service.mock';
 
 jest.mock('prettier', () => ({

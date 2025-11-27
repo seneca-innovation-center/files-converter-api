@@ -6,6 +6,7 @@ import {
   Res,
   BadRequestException,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -13,8 +14,10 @@ import {
   ApiConsumes,
   ApiBody,
   ApiResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import {
   ConvertPresentationDto,
@@ -23,6 +26,8 @@ import {
 import { CreatePresentationDto } from '../dtos/create-presentation.dto';
 import { PresentationsService } from '../services/presentations.service';
 
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('presentations')
 @Controller('presentations')
 export class PresentationsController {

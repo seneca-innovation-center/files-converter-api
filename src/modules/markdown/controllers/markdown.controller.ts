@@ -4,9 +4,17 @@ import {
   Req,
   Res,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiConsumes,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import {
   ConvertMarkdownDto,
@@ -17,6 +25,8 @@ import { MarkdownService } from '../services/markdown.service';
 /**
  * Controller for markdown conversion endpoints
  */
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('markdown')
 @Controller('markdown')
 export class MarkdownController {

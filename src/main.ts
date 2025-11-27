@@ -40,14 +40,12 @@ export class SocketAdapter extends IoAdapter {
     },
   ): Server {
     // Parse comma-separated list of allowed origins from environment variable
-    const origins = process.env.BASE_URL
-      ? process.env.BASE_URL.split(',').map((url) => url.trim())
-      : ['https://files-converter-seven.vercel.app'];
+    const origins = process.env.BASE_URL?.split(',').map((url) => url.trim());
 
     return super.createIOServer(port, {
       ...options,
       cors: {
-        origin: origins,
+        origin: origins || '*',
         methods: ['GET', 'POST'],
       },
     });
@@ -89,10 +87,20 @@ async function bootstrap(): Promise<void> {
     },
   );
 
-  // Parse multiple URLs from BASE_URL environment variable for CORS configuration
-  // const origins = process.env.BASE_URL
-  //   ? process.env.BASE_URL.split(',').map((url) => url.trim())
-  //   : ['https://files-converter-seven.vercel.app'];
+  // Parse multiple URLs from BASE_URL and AUTH_TRUSTED_ORIGINS for CORS configuration
+  const baseUrlOrigins =
+    process.env.BASE_URL?.split(',').map((url) => url.trim()) || [];
+  const authTrustedOrigins =
+    process.env.AUTH_TRUSTED_ORIGINS?.split(',').map((url) => url.trim()) || [];
+  // Combine and deduplicate origins
+  const allOrigins = [...new Set([...baseUrlOrigins, ...authTrustedOrigins])];
+  // In development, allow localhost:3000 by default if no origins are specified
+  const origins =
+    allOrigins.length > 0
+      ? allOrigins
+      : process.env.NODE_ENV === 'production'
+        ? []
+        : ['http://localhost:3000'];
 
   // === Fastify Plugin Registration ===
 
@@ -106,10 +114,17 @@ async function bootstrap(): Promise<void> {
 
   // Configure CORS (Cross-Origin Resource Sharing) to allow requests from specified origins
   await app.register(fastifyCors, {
-    origin: '*', // Allowed origins from environment variable
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], // Allowed HTTP methods
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control'], // Allowed request headers
+    origin: origins.length > 0 ? origins : true, // Allowed origins from environment variables, or allow all in dev
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Allowed HTTP methods
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Cache-Control',
+      'X-Requested-With',
+    ], // Allowed request headers
     credentials: true, // Allow cookies and authentication headers
+    preflightContinue: false, // Respond to preflight requests immediately
+    optionsSuccessStatus: 204, // Return 204 for successful OPTIONS requests
   });
 
   // Configure Helmet for security headers (protection against common vulnerabilities)

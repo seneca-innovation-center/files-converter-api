@@ -3,7 +3,7 @@ import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-// import { MongooseModule } from '@nestjs/mongoose';
+import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { MailerModule } from '@nestjs-modules/mailer';
@@ -12,6 +12,7 @@ import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handleba
 import { AppController } from './app.controller';
 import { ThreeDModule } from './modules/3d/3d.module';
 import { ArchivesModule } from './modules/archives/archives.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { CodeModule } from './modules/code/code.module';
 import { EbooksModule } from './modules/ebooks/ebooks.module';
 import { FilesModule } from './modules/files/files.module';
@@ -21,6 +22,7 @@ import { MediaModule } from './modules/media/media.module';
 import { OcrModule } from './modules/ocr/ocr.module';
 import { PresentationsModule } from './modules/presentations/presentations.module';
 import { QrModule } from './modules/qr/qr.module';
+import { UsersModule } from './modules/users/users.module';
 import { TempFileCleanupService } from './utils/temp-file-cleanup.service';
 
 @Module({
@@ -39,14 +41,13 @@ import { TempFileCleanupService } from './utils/temp-file-cleanup.service';
       },
     ]),
     // MongoDB connection using URI from environment variables (remove this module if database is not needed)
-
-    /* MongooseModule.forRootAsync({
+    MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => ({
-        uri: config.get('MONGODB_URI'),
+        uri: config.get<string>('MONGODB_URI'),
       }),
-    }), */
+    }),
 
     // Email service configuration using SMTP transport and Handlebars templates (remove this module if email functionality is not needed)
     MailerModule.forRootAsync({
@@ -89,6 +90,8 @@ import { TempFileCleanupService } from './utils/temp-file-cleanup.service';
     CodeModule,
     PresentationsModule,
     EbooksModule,
+    UsersModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [

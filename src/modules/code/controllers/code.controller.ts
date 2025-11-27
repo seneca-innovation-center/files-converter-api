@@ -4,9 +4,17 @@ import {
   Req,
   Res,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiConsumes,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import { FormatCodeDto, CodeLanguage } from '../dtos/format-code.dto';
 import { CodeService } from '../services/code.service';
@@ -14,6 +22,8 @@ import { CodeService } from '../services/code.service';
 /**
  * Controller for code formatting and highlighting endpoints
  */
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('code')
 @Controller('code')
 export class CodeController {

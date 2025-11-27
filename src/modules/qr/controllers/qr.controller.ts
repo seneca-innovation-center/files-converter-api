@@ -1,6 +1,7 @@
-import { Controller, Post, Body, Res } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
+import { Controller, Post, Body, Res, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import { GenerateBarcodeDto } from '../dtos/generate-barcode.dto';
 import { GenerateQrDto } from '../dtos/generate-qr.dto';
@@ -9,6 +10,8 @@ import { QrService } from '../services/qr.service';
 /**
  * Controller for QR code and barcode generation endpoints
  */
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('qr')
 @Controller('qr')
 export class QrController {

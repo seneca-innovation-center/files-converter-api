@@ -4,9 +4,17 @@ import {
   Req,
   Res,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiConsumes,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import { ConvertImageDto, ImageFormat } from '../dtos/convert-image.dto';
 import { ImagesService } from '../services/images.service';
@@ -15,6 +23,8 @@ import { ImagesService } from '../services/images.service';
  * Controller for handling image conversion endpoints.
  * Provides endpoints for converting images between formats, resizing, and background removal.
  */
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('images')
 @Controller('images')
 export class ImagesController {
