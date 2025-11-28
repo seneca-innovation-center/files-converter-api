@@ -8,10 +8,10 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { IoAdapter } from '@nestjs/platform-socket.io';
+// import { IoAdapter } from '@nestjs/platform-socket.io';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as dotenv from 'dotenv';
-import { Server, ServerOptions, Socket } from 'socket.io';
+// import { Server, ServerOptions, Socket } from 'socket.io';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -23,44 +23,44 @@ import { AllExceptionsFilter } from './utils/Exceptions.filter';
  * Custom Socket.IO adapter that extends the default IoAdapter.
  * Configures CORS settings for WebSocket connections based on environment variables.
  */
-export class SocketAdapter extends IoAdapter {
-  /**
-   * Creates and configures a Socket.IO server instance.
-   * Parses allowed origins from BASE_URL environment variable and applies CORS settings.
-   *
-   * @param port The port number for the Socket.IO server
-   * @param options Additional server options including namespace and server instance
-   * @returns Configured Socket.IO server instance
-   */
-  createIOServer(
-    port: number,
-    options?: ServerOptions & {
-      namespace?: string;
-      server?: unknown;
-    },
-  ): Server {
-    // Parse comma-separated list of allowed origins from environment variable
-    const origins = process.env.BASE_URL?.split(',').map((url) => url.trim());
+// export class SocketAdapter extends IoAdapter {
+/**
+ * Creates and configures a Socket.IO server instance.
+ * Parses allowed origins from BASE_URL environment variable and applies CORS settings.
+ *
+ * @param port The port number for the Socket.IO server
+ * @param options Additional server options including namespace and server instance
+ * @returns Configured Socket.IO server instance
+ */
+// createIOServer(
+//   port: number,
+//   options?: ServerOptions & {
+//     namespace?: string;
+//     server?: unknown;
+//   },
+// ): Server {
+//   // Parse comma-separated list of allowed origins from environment variable
+//   const origins = process.env.BASE_URL?.split(',').map((url) => url.trim());
 
-    return super.createIOServer(port, {
-      ...options,
-      cors: {
-        origin: origins || '*',
-        methods: ['GET', 'POST'],
-      },
-    });
-  }
+//   return super.createIOServer(port, {
+//     ...options,
+//     cors: {
+//       origin: origins || '*',
+//       methods: ['GET', 'POST'],
+//     },
+//   });
+// }
 
-  /**
-   * Bind a callback function to the "connection" event on the given server.
-   *
-   * @param server The server to bind the callback to.
-   * @param callback The callback to be invoked when a client connects.
-   */
-  bindClientConnect(server: Server, callback: (socket: Socket) => void): void {
-    server.on('connection', callback);
-  }
-}
+/**
+ * Bind a callback function to the "connection" event on the given server.
+ *
+ * @param server The server to bind the callback to.
+ * @param callback The callback to be invoked when a client connects.
+ */
+//   bindClientConnect(server: Server, callback: (socket: Socket) => void): void {
+//     server.on('connection', callback);
+//   }
+// }
 
 /**
  * Application bootstrap function - Main entry point for the NestJS application.
