@@ -5,6 +5,7 @@ import {
   Res,
   BadRequestException,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -12,8 +13,10 @@ import {
   ApiConsumes,
   ApiBody,
   ApiResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import { Extract3DDataDto, ExtractType } from '../dtos/3d-operations.dto';
 import { Convert3DDto, ThreeDFormat } from '../dtos/convert-3d.dto';
@@ -23,6 +26,8 @@ import { ThreeDService } from '../services/3d.service';
  * Controller for handling 3D model conversion endpoints.
  * Provides endpoints for converting 3D models between formats and optimization.
  */
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('3d')
 @Controller('3d')
 export class ThreeDController {

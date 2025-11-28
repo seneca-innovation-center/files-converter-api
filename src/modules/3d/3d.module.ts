@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { AuthModule } from '../auth/auth.module';
+
 import { ThreeDController } from './controllers/3d.controller';
 import { ThreeDService } from './services/3d.service';
 
@@ -8,6 +10,7 @@ import { ThreeDService } from './services/3d.service';
  * Handles 3D model format conversion and optimization.
  */
 @Module({
+  imports: [AuthModule],
   controllers: [ThreeDController],
   providers: [ThreeDService],
   exports: [ThreeDService],

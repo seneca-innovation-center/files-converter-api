@@ -5,6 +5,7 @@ import {
   Res,
   BadRequestException,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -12,8 +13,10 @@ import {
   ApiConsumes,
   ApiBody,
   ApiResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import { ConvertMediaDto } from '../dtos/convert-media.dto';
 import {
@@ -27,6 +30,8 @@ import { MediaService } from '../services/media.service';
 /**
  * Controller for video and audio conversion endpoints
  */
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('media')
 @Controller('media')
 export class MediaController {

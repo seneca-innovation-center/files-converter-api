@@ -4,9 +4,17 @@ import {
   Req,
   Res,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiConsumes,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import { CreateArchiveDto, ArchiveFormat } from '../dtos/create-archive.dto';
 import { ArchivesService } from '../services/archives.service';
@@ -14,6 +22,8 @@ import { ArchivesService } from '../services/archives.service';
 /**
  * Controller for archive creation and extraction
  */
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('archives')
 @Controller('archives')
 export class ArchivesController {

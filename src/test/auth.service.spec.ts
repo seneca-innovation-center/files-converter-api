@@ -1,47 +1,51 @@
-import { ConfigService } from '@nestjs/config';
+import type { Auth } from 'better-auth';
 
 import { AuthService } from '../modules/auth/services/auth.service';
-
-const mockVerifyToken = jest.fn();
-const mockGetUser = jest.fn();
-
-jest.mock('@clerk/backend', () => ({
-  verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
-}));
-
-jest.mock('@clerk/fastify', () => ({
-  createClerkClient: () => ({
-    users: {
-      getUser: (...args: unknown[]) => mockGetUser(...args),
-    },
-  }),
-}));
+import { UsersService } from '../modules/users/services/users.service';
 
 describe('AuthService', () => {
-  const configMock = {
-    get: (key: string) => {
-      if (key === 'CLERK_SECRET_KEY') return 'secret';
-      if (key === 'CLERK_JWT_KEY') return 'jwt-key';
-      if (key === 'API_URL') return 'http://localhost';
-      return null;
-    },
-  } as ConfigService;
+  const mockGetSession = jest.fn();
+  const mockEnsureUser = jest.fn();
+
+  const createService = () =>
+    new AuthService(
+      {
+        handler: jest.fn().mockResolvedValue(new Response('ok')),
+        api: {
+          getSession: mockGetSession,
+        },
+      } as unknown as Auth,
+      {
+        ensureUserFromAuth: mockEnsureUser,
+      } as unknown as UsersService,
+    );
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should resolve role from Clerk token metadata', async () => {
-    mockVerifyToken.mockResolvedValue({ sub: 'user_123' });
-    mockGetUser.mockResolvedValue({
-      publicMetadata: { role: 'user' },
+  it('should resolve authenticated user from Better Auth session', async () => {
+    mockGetSession.mockResolvedValue({
+      user: { id: 'auth_1', email: 'user@example.com', name: 'Test User' },
+      session: { id: 'session_1' },
     });
 
-    const service = new AuthService(configMock);
-    const role = await service.getRole('token');
+    mockEnsureUser.mockResolvedValue({
+      authId: 'auth_1',
+      email: 'user@example.com',
+      fullName: 'Test User',
+      role: 'admin',
+    });
 
-    expect(role).toBe('user');
-    expect(mockVerifyToken).toHaveBeenCalled();
-    expect(mockGetUser).toHaveBeenCalled();
+    const service = createService();
+    const user = await service.verifyToken('token');
+
+    expect(user.role).toBe('admin');
+    expect(mockGetSession).toHaveBeenCalled();
+    expect(mockEnsureUser).toHaveBeenCalledWith({
+      authId: 'auth_1',
+      email: 'user@example.com',
+      fullName: 'Test User',
+    });
   });
 });

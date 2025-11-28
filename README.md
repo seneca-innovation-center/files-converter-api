@@ -62,7 +62,47 @@ PORT=3001
 BASE_URL=http://localhost:3000
 TMP_DIR=/tmp
 NODE_ENV=development
+
+# Mongo & Auth
+MONGODB_URI=mongodb://127.0.0.1:27017/files-converter
+BETTER_AUTH_SECRET=replace-with-long-random-string
+API_URL=http://localhost:3001
+# Better Auth social providers
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+# optional comma separated list e.g. http://localhost:3000,https://app.example.com
+AUTH_TRUSTED_ORIGINS=http://localhost:3000
 ```
+
+### Authentication & User Management
+
+- Authentication is powered by [Better Auth](https://www.better-auth.com/) with the MongoDB adapter on top of the shared Mongoose connection.
+- All auth routes are proxied through Fastify at `POST/GET /auth/*` (sign-in, sign-up, password reset, session management, etc.).
+- Better Auth issues signed session tokens that can be used as Bearer tokens (the bearer plugin is enabled). Guards expect an `Authorization: Bearer <token>` header.
+- A dedicated `UsersModule` persists application-specific metadata (role, permissions) in the `users` collection. Default role is `user`.
+- New REST helpers:
+  - `GET /users/me` – returns the currently authenticated profile.
+  - `GET /users` – admin-only listing.
+  - `PATCH /users/:id` & `DELETE /users/:id` – super-admin role management.
+- Google & GitHub login is enabled via Better Auth's built-in social providers. Call `POST /auth/sign-in/social` with body: `{ provider: 'google' | 'github', disableRedirect?: boolean }`. **Note**: Do not include `callbackURL` in the request body; Better Auth automatically handles callbacks using `{API_URL}/api/auth/callback/{provider}`. After successful OAuth authentication, users are automatically redirected to your frontend URL (configured via `BASE_URL` or `AUTH_TRUSTED_ORIGINS`) instead of the API URL. The endpoint returns a redirect URL for the OAuth consent flow; upon completion Better Auth creates the session automatically.
+- Required environment variables:
+  - `MONGODB_URI` – connection string for the primary database.
+  - `BETTER_AUTH_SECRET` – long random string used to sign sessions/tokens.
+  - `API_URL` – publicly reachable base URL (used for callback + token audience).
+  - `AUTH_TRUSTED_ORIGINS` – optional comma-separated list for CSRF/origin checks and CORS (e.g., `http://localhost:3000,https://app.example.com`).
+  - `BASE_URL` – also used for CORS configuration (can be combined with `AUTH_TRUSTED_ORIGINS`).
+  - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` – OAuth credentials from Google Cloud Console.
+  - `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` – OAuth credentials from GitHub Developer Settings.
+- **OAuth Redirect URIs Configuration:**
+  - **Google Cloud Console**: Add authorized redirect URI: `{API_URL}/api/auth/callback/google`
+    - Example (local): `http://localhost:3001/api/auth/callback/google`
+    - Example (production): `https://api.example.com/api/auth/callback/google`
+  - **GitHub Developer Settings**: Add authorized redirect URI: `{API_URL}/api/auth/callback/github`
+    - Example (local): `http://localhost:3001/api/auth/callback/github`
+    - Example (production): `https://api.example.com/api/auth/callback/github`
+- To seed admin accounts, update the corresponding document in the `users` collection (`role: "admin"` or `"super-admin"`).
 
 ## Running the Application
 

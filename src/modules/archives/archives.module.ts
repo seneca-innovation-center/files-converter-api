@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
+import { AuthModule } from '../auth/auth.module';
+
 import { ArchivesController } from './controllers/archives.controller';
 import { ArchivesService } from './services/archives.service';
 
@@ -8,7 +10,7 @@ import { ArchivesService } from './services/archives.service';
  * Module for archive creation and extraction
  */
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, AuthModule],
   controllers: [ArchivesController],
   providers: [ArchivesService],
   exports: [ArchivesService],

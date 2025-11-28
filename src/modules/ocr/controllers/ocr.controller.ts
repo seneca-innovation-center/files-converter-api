@@ -4,9 +4,17 @@ import {
   Req,
   Res,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiConsumes,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
 import { ExtractTextDto, OcrLanguage } from '../dtos/extract-text.dto';
 import { OcrService } from '../services/ocr.service';
@@ -14,6 +22,8 @@ import { OcrService } from '../services/ocr.service';
 /**
  * Controller for OCR text extraction endpoints
  */
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 @ApiTags('ocr')
 @Controller('ocr')
 export class OcrController {

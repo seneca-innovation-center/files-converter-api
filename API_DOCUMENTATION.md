@@ -23,6 +23,64 @@
 
 ---
 
+## Authentication & User Management
+
+- Authentication is handled by [Better Auth](https://www.better-auth.com/) with MongoDB storage and the bearer plugin enabled.
+- All auth routes are proxied under `/auth/*`. Core flows:
+  - `POST /auth/sign-up/email`
+  - `POST /auth/sign-in/email`
+  - `GET /auth/get-session`
+  - `POST /auth/request-password-reset`
+- Set the following environment variables:
+
+```env
+MONGODB_URI=mongodb://127.0.0.1:27017/files-converter
+BETTER_AUTH_SECRET=replace-with-long-random-string
+API_URL=http://localhost:3001
+AUTH_TRUSTED_ORIGINS=http://localhost:3000
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+```
+
+- API guards read the bearer token (`Authorization: Bearer <token>`) issued by Better Auth. Tokens are compatible with cookie sessions out of the box.
+- New user administration endpoints:
+  - `GET /users/me` – requires `AuthGuard`
+  - `GET /users` – requires `AdminGuard`
+  - `PATCH /users/:id` / `DELETE /users/:id` – require `SuperAdminGuard`
+- User documents contain `role` (`user`, `admin`, `super-admin`) and optional `permissions`. Update roles via the new endpoints or directly in Mongo.
+- Social login:
+  - `POST /auth/sign-in/social` with body: `{ provider: 'google' | 'github', disableRedirect?: boolean }`.
+  - **Important**: Do not include `callbackURL` in the request body. Better Auth automatically handles callbacks using `{API_URL}/api/auth/callback/{provider}`.
+  - After successful OAuth authentication, Better Auth automatically redirects to your frontend URL (configured via `BASE_URL` or `AUTH_TRUSTED_ORIGINS` environment variables) instead of the API URL.
+  - Default behavior (without `disableRedirect` or `disableRedirect: false`) returns `{ redirect: true, url: 'https://...' }`; redirect the browser to this URL and let Better Auth set cookies on callback. After the callback, users are redirected to the frontend.
+  - If `disableRedirect: true`, the endpoint completes the OAuth exchange immediately (server-to-server) and returns `{ redirect: false, token, user }`.
+  - **Example request body**:
+    ```json
+    {
+      "provider": "google"
+    }
+    ```
+    or
+    ```json
+    {
+      "provider": "google",
+      "disableRedirect": false
+    }
+    ```
+- **OAuth Redirect URIs Configuration:**
+  - **Google Cloud Console** (APIs & Services > Credentials > OAuth 2.0 Client IDs):
+    - Add authorized redirect URI: `{API_URL}/api/auth/callback/google`
+    - Example (local): `http://localhost:3001/api/auth/callback/google`
+    - Example (production): `https://api.example.com/api/auth/callback/google`
+  - **GitHub Developer Settings** (Settings > Developer settings > OAuth Apps):
+    - Add authorized redirect URI: `{API_URL}/api/auth/callback/github`
+    - Example (local): `http://localhost:3001/api/auth/callback/github`
+    - Example (production): `https://api.example.com/api/auth/callback/github`
+
+---
+
 ## Images API
 
 ### POST `/api/images/convert`

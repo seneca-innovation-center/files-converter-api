@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { AuthModule } from '../auth/auth.module';
+
 import { FilesController } from './controllers/files.controller';
 import { FilesService } from './services/files.service';
 
@@ -8,6 +10,7 @@ import { FilesService } from './services/files.service';
  * Handles file format conversion for various document types.
  */
 @Module({
+  imports: [AuthModule],
   controllers: [FilesController],
   providers: [FilesService],
   exports: [FilesService],
