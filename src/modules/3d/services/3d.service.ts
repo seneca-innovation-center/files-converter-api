@@ -187,6 +187,27 @@ export class ThreeDService {
           break;
         }
 
+        case ThreeDFormat.STL:
+          // Convert GLTF/GLB to STL (ASCII format)
+          outputBuffer = await this.convertToStl(document);
+          filename = `converted_${timestamp}_${randomString}.stl`;
+          mimeType = 'model/stl';
+          break;
+
+        case ThreeDFormat.PLY:
+          // Convert GLTF/GLB to PLY (ASCII format)
+          outputBuffer = await this.convertToPly(document);
+          filename = `converted_${timestamp}_${randomString}.ply`;
+          mimeType = 'model/ply';
+          break;
+
+        case ThreeDFormat.FBX:
+          // Convert GLTF/GLB to FBX (binary format)
+          outputBuffer = await this.convertToFbx(document);
+          filename = `converted_${timestamp}_${randomString}.fbx`;
+          mimeType = 'application/octet-stream';
+          break;
+
         default:
           throw new BadRequestException(
             `Unsupported target format: ${String(dto.format)}`,
@@ -465,6 +486,415 @@ def Xform "Root"
     await fs.unlink(usdaPath);
 
     return usdzPath;
+  }
+
+  /**
+   * Converts a GLTF document to STL format (ASCII)
+   * @param document GLTF document
+   * @returns STL file buffer
+   */
+  private async convertToStl(document: Document): Promise<Buffer> {
+    let stlContent = 'solid converted_model\n';
+
+    // Iterate through all meshes in the document
+    for (const mesh of document.getRoot().listMeshes()) {
+      for (const primitive of mesh.listPrimitives()) {
+        const position = primitive.getAttribute('POSITION');
+        const normal = primitive.getAttribute('NORMAL');
+        const indices = primitive.getIndices();
+
+        if (!position) continue;
+
+        const positionArray = position.getArray();
+        const normalArray = normal?.getArray();
+        const indicesArray = indices?.getArray();
+
+        if (!positionArray || !indicesArray) continue;
+
+        // Write triangles
+        for (let i = 0; i < indicesArray.length; i += 3) {
+          const idx1 = indicesArray[i];
+          const idx2 = indicesArray[i + 1];
+          const idx3 = indicesArray[i + 2];
+
+          // Get vertex positions
+          const v1x = positionArray[idx1 * 3];
+          const v1y = positionArray[idx1 * 3 + 1];
+          const v1z = positionArray[idx1 * 3 + 2];
+
+          const v2x = positionArray[idx2 * 3];
+          const v2y = positionArray[idx2 * 3 + 1];
+          const v2z = positionArray[idx2 * 3 + 2];
+
+          const v3x = positionArray[idx3 * 3];
+          const v3y = positionArray[idx3 * 3 + 1];
+          const v3z = positionArray[idx3 * 3 + 2];
+
+          // Calculate face normal if not available
+          let nx = 0;
+          let ny = 0;
+          let nz = 0;
+
+          if (normalArray) {
+            // Use average of vertex normals
+            nx =
+              (normalArray[idx1 * 3] +
+                normalArray[idx2 * 3] +
+                normalArray[idx3 * 3]) /
+              3;
+            ny =
+              (normalArray[idx1 * 3 + 1] +
+                normalArray[idx2 * 3 + 1] +
+                normalArray[idx3 * 3 + 1]) /
+              3;
+            nz =
+              (normalArray[idx1 * 3 + 2] +
+                normalArray[idx2 * 3 + 2] +
+                normalArray[idx3 * 3 + 2]) /
+              3;
+          } else {
+            // Calculate normal from triangle vertices
+            const dx1 = v2x - v1x;
+            const dy1 = v2y - v1y;
+            const dz1 = v2z - v1z;
+            const dx2 = v3x - v1x;
+            const dy2 = v3y - v1y;
+            const dz2 = v3z - v1z;
+
+            nx = dy1 * dz2 - dz1 * dy2;
+            ny = dz1 * dx2 - dx1 * dz2;
+            nz = dx1 * dy2 - dy1 * dx2;
+
+            const length = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            if (length > 0) {
+              nx /= length;
+              ny /= length;
+              nz /= length;
+            }
+          }
+
+          // Write facet
+          stlContent += `  facet normal ${nx.toFixed(6)} ${ny.toFixed(6)} ${nz.toFixed(6)}\n`;
+          stlContent += '    outer loop\n';
+          stlContent += `      vertex ${v1x.toFixed(6)} ${v1y.toFixed(6)} ${v1z.toFixed(6)}\n`;
+          stlContent += `      vertex ${v2x.toFixed(6)} ${v2y.toFixed(6)} ${v2z.toFixed(6)}\n`;
+          stlContent += `      vertex ${v3x.toFixed(6)} ${v3y.toFixed(6)} ${v3z.toFixed(6)}\n`;
+          stlContent += '    endloop\n';
+          stlContent += '  endfacet\n';
+        }
+      }
+    }
+
+    stlContent += 'endsolid converted_model\n';
+
+    return Buffer.from(stlContent, 'utf-8');
+  }
+
+  /**
+   * Converts a GLTF document to PLY format (ASCII)
+   * @param document GLTF document
+   * @returns PLY file buffer
+   */
+  private async convertToPly(document: Document): Promise<Buffer> {
+    // Collect all vertices and faces
+    const vertices: Array<[number, number, number]> = [];
+    const normals: Array<[number, number, number]> = [];
+    const texcoords: Array<[number, number]> = [];
+    const faces: number[][] = [];
+
+    let vertexOffset = 0;
+
+    // Iterate through all meshes
+    for (const mesh of document.getRoot().listMeshes()) {
+      for (const primitive of mesh.listPrimitives()) {
+        const position = primitive.getAttribute('POSITION');
+        const normal = primitive.getAttribute('NORMAL');
+        const texcoord = primitive.getAttribute('TEXCOORD_0');
+        const indices = primitive.getIndices();
+
+        if (!position) continue;
+
+        const positionArray = position.getArray();
+        const normalArray = normal?.getArray();
+        const texcoordArray = texcoord?.getArray();
+        const indicesArray = indices?.getArray();
+
+        if (!positionArray || !indicesArray) continue;
+
+        // Add vertices
+        for (let i = 0; i < positionArray.length; i += 3) {
+          vertices.push([
+            positionArray[i],
+            positionArray[i + 1],
+            positionArray[i + 2],
+          ]);
+        }
+
+        // Add normals if available
+        if (normalArray) {
+          for (let i = 0; i < normalArray.length; i += 3) {
+            normals.push([
+              normalArray[i],
+              normalArray[i + 1],
+              normalArray[i + 2],
+            ]);
+          }
+        }
+
+        // Add texture coordinates if available
+        if (texcoordArray) {
+          for (let i = 0; i < texcoordArray.length; i += 2) {
+            texcoords.push([texcoordArray[i], texcoordArray[i + 1]]);
+          }
+        }
+
+        // Add faces with vertex offset
+        for (let i = 0; i < indicesArray.length; i += 3) {
+          faces.push([
+            indicesArray[i] + vertexOffset,
+            indicesArray[i + 1] + vertexOffset,
+            indicesArray[i + 2] + vertexOffset,
+          ]);
+        }
+
+        vertexOffset += positionArray.length / 3;
+      }
+    }
+
+    // Build PLY header
+    let plyContent = 'ply\n';
+    plyContent += 'format ascii 1.0\n';
+    plyContent += `element vertex ${vertices.length}\n`;
+    plyContent += 'property float x\n';
+    plyContent += 'property float y\n';
+    plyContent += 'property float z\n';
+
+    if (normals.length === vertices.length) {
+      plyContent += 'property float nx\n';
+      plyContent += 'property float ny\n';
+      plyContent += 'property float nz\n';
+    }
+
+    if (texcoords.length === vertices.length) {
+      plyContent += 'property float s\n';
+      plyContent += 'property float t\n';
+    }
+
+    plyContent += `element face ${faces.length}\n`;
+    plyContent += 'property list uchar int vertex_indices\n';
+    plyContent += 'end_header\n';
+
+    // Write vertices
+    for (let i = 0; i < vertices.length; i++) {
+      const [x, y, z] = vertices[i];
+      plyContent += `${x.toFixed(6)} ${y.toFixed(6)} ${z.toFixed(6)}`;
+
+      if (normals.length === vertices.length && normals[i]) {
+        const [nx, ny, nz] = normals[i];
+        plyContent += ` ${nx.toFixed(6)} ${ny.toFixed(6)} ${nz.toFixed(6)}`;
+      }
+
+      if (texcoords.length === vertices.length && texcoords[i]) {
+        const [s, t] = texcoords[i];
+        plyContent += ` ${s.toFixed(6)} ${t.toFixed(6)}`;
+      }
+
+      plyContent += '\n';
+    }
+
+    // Write faces
+    for (const face of faces) {
+      plyContent += `3 ${face[0]} ${face[1]} ${face[2]}\n`;
+    }
+
+    return Buffer.from(plyContent, 'utf-8');
+  }
+
+  /**
+   * Converts a GLTF document to FBX format (binary)
+   * Note: FBX is a complex binary format. This is a basic implementation
+   * that creates a simplified FBX file with mesh data.
+   * @param document GLTF document
+   * @returns FBX file buffer
+   */
+  private async convertToFbx(document: Document): Promise<Buffer> {
+    // FBX is a complex binary format. For a basic implementation,
+    // we'll create an ASCII FBX file which is easier to generate
+    let fbxContent = `; FBX 7.4.0 project file
+; Created by Files Converter API
+; ----------------------------------------------------
+
+FBXHeaderExtension:  {
+\tFBXHeaderVersion: 1003
+\tFBXVersion: 7400
+\tCreationTimeStamp: {
+\t\tVersion: 1000
+\t\tYear: ${new Date().getFullYear()}
+\t\tMonth: ${new Date().getMonth() + 1}
+\t\tDay: ${new Date().getDate()}
+\t\tHour: ${new Date().getHours()}
+\t\tMinute: ${new Date().getMinutes()}
+\t\tSecond: ${new Date().getSeconds()}
+\t\tMillisecond: ${new Date().getMilliseconds()}
+\t}
+\tCreator: "Files Converter API"
+}
+GlobalSettings:  {
+\tVersion: 1000
+\tProperties70:  {
+\t\tP: "UpAxis", "int", "Integer", "",1
+\t\tP: "UpAxisSign", "int", "Integer", "",1
+\t\tP: "FrontAxis", "int", "Integer", "",2
+\t\tP: "FrontAxisSign", "int", "Integer", "",1
+\t\tP: "CoordAxis", "int", "Integer", "",0
+\t\tP: "CoordAxisSign", "int", "Integer", "",1
+\t\tP: "OriginalUpAxis", "int", "Integer", "",1
+\t\tP: "OriginalUpAxisSign", "int", "Integer", "",1
+\t\tP: "UnitScaleFactor", "double", "Number", "",1
+\t}
+}
+Documents:  {
+\tCount: 1
+\tDocument: 1000 {
+\t\tProperties70:  {
+\t\t\tP: "SourceObject", "object", "", ""
+\t\t\tP: "ActiveAnimStackName", "KString", "", "", "Take 001"
+\t\t}
+\t\tRootNode: 0
+\t}
+\tRootNode:  {
+\t\tType: "Model"
+\t\tVersion: 232
+\t\tProperties70:  {
+\t\t\tP: "RotationActive", "bool", "", "",1
+\t\t\tP: "InheritType", "enum", "", "",1
+\t\t\tP: "ScalingMax", "Vector3D", "Vector", "",0,0,0
+\t\t\tP: "DefaultAttributeIndex", "int", "Integer", "",-1
+\t\t}
+\t}
+}
+Definitions:  {
+\tVersion: 100
+\tCount: 2
+\tObjectType: "Model" {
+\t\tCount: 1
+\t}
+\tObjectType: "Geometry" {
+\t\tCount: 1
+\t}
+}
+Objects:  {
+`;
+
+    let meshIndex = 0;
+    let geometryIndex = 0;
+
+    // Extract mesh data
+    for (const mesh of document.getRoot().listMeshes()) {
+      const meshName = mesh.getName() || `Mesh_${meshIndex}`;
+
+      for (const primitive of mesh.listPrimitives()) {
+        const position = primitive.getAttribute('POSITION');
+        const normal = primitive.getAttribute('NORMAL');
+        const indices = primitive.getIndices();
+
+        if (!position) continue;
+
+        const positionArray = position.getArray();
+        const normalArray = normal?.getArray();
+        const indicesArray = indices?.getArray();
+
+        if (!positionArray || !indicesArray) continue;
+
+        const vertexCount = positionArray.length / 3;
+
+        // Write Model node
+        fbxContent += `\tModel: ${meshIndex * 1000 + 100}, "${meshName}", "Mesh" {\n`;
+        fbxContent += `\t\tVersion: 232\n`;
+        fbxContent += `\t\tProperties70:  {\n`;
+        fbxContent += `\t\t\tP: "RotationActive", "bool", "", "",1\n`;
+        fbxContent += `\t\t\tP: "InheritType", "enum", "", "",1\n`;
+        fbxContent += `\t\t\tP: "ScalingMax", "Vector3D", "Vector", "",0,0,0\n`;
+        fbxContent += `\t\t\tP: "DefaultAttributeIndex", "int", "Integer", "",-1\n`;
+        fbxContent += `\t\t}\n`;
+        fbxContent += `\t\tShading: T\n`;
+        fbxContent += `\t\tCulling: "CullingOff"\n`;
+        fbxContent += `\t}\n`;
+
+        // Write Geometry node
+        fbxContent += `\tGeometry: ${geometryIndex * 1000 + 200}, "${meshName}_Geometry", "Mesh" {\n`;
+        fbxContent += `\t\tVertices: *${vertexCount * 3} {\n`;
+        fbxContent += `\t\t\ta: `;
+
+        // Write vertices
+        for (let i = 0; i < positionArray.length; i += 3) {
+          fbxContent += `${positionArray[i].toFixed(6)},${positionArray[i + 1].toFixed(6)},${positionArray[i + 2].toFixed(6)}`;
+          if (i + 3 < positionArray.length) {
+            fbxContent += ',';
+          }
+        }
+        fbxContent += '\n\t\t}\n';
+
+        // Write polygon vertex indices
+        fbxContent += `\t\tPolygonVertexIndex: *${indicesArray.length} {\n`;
+        fbxContent += `\t\t\ta: `;
+        for (let i = 0; i < indicesArray.length; i += 3) {
+          // FBX uses negative indices to mark end of polygon
+          const idx1 = indicesArray[i];
+          const idx2 = indicesArray[i + 1];
+          const idx3 = -(indicesArray[i + 2] + 1); // Negative marks end
+          fbxContent += `${idx1},${idx2},${idx3}`;
+          if (i + 3 < indicesArray.length) {
+            fbxContent += ',';
+          }
+        }
+        fbxContent += '\n\t\t}\n';
+
+        // Write normals if available
+        if (normalArray && normalArray.length > 0) {
+          fbxContent += `\t\tLayerElementNormal: 0 {\n`;
+          fbxContent += `\t\t\tVersion: 101\n`;
+          fbxContent += `\t\t\tName: ""\n`;
+          fbxContent += `\t\t\tMappingInformationType: "ByPolygonVertex"\n`;
+          fbxContent += `\t\t\tReferenceInformationType: "Direct"\n`;
+          fbxContent += `\t\t\tNormals: *${normalArray.length} {\n`;
+          fbxContent += `\t\t\t\ta: `;
+          for (let i = 0; i < normalArray.length; i += 3) {
+            fbxContent += `${normalArray[i].toFixed(6)},${normalArray[i + 1].toFixed(6)},${normalArray[i + 2].toFixed(6)}`;
+            if (i + 3 < normalArray.length) {
+              fbxContent += ',';
+            }
+          }
+          fbxContent += '\n\t\t\t}\n';
+          fbxContent += `\t\t}\n`;
+          fbxContent += `\t\tLayer: 0 {\n`;
+          fbxContent += `\t\t\tVersion: 100\n`;
+          fbxContent += `\t\t\tLayerElement:  {\n`;
+          fbxContent += `\t\t\t\tType: "LayerElementNormal"\n`;
+          fbxContent += `\t\t\t\tTypedIndex: 0\n`;
+          fbxContent += `\t\t\t}\n`;
+          fbxContent += `\t\t}\n`;
+        }
+
+        fbxContent += `\t}\n`;
+
+        geometryIndex++;
+      }
+
+      meshIndex++;
+    }
+
+    fbxContent += `}\n`;
+    fbxContent += `Connections:  {\n`;
+
+    // Write connections (link models to geometries)
+    for (let i = 0; i < meshIndex; i++) {
+      fbxContent += `\tC: "OO",${i * 1000 + 200},${i * 1000 + 100}\n`;
+    }
+
+    fbxContent += `}\n`;
+
+    return Buffer.from(fbxContent, 'utf-8');
   }
 
   /**
