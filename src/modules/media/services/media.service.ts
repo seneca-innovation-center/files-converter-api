@@ -622,9 +622,19 @@ export class MediaService {
       // Extract audio using FFmpeg
       await new Promise<void>((resolve, reject) => {
         ffmpeg(inputPath)
-          .audioCodec('pcm_s16le')
-          .audioFrequency(16000) // Whisper works best with 16kHz
-          .audioChannels(1) // Mono
+          .inputOptions(['-ss', '0']) // Start from the very beginning
+          .outputOptions([
+            '-vn',
+            '-acodec',
+            'pcm_s16le',
+            '-ar',
+            '16000',
+            '-ac',
+            '1',
+            '-avoid_negative_ts',
+            'make_zero',
+          ]) // Clean audio extraction
+          .audioFilters('aresample=async=1') // Handle async audio properly
           .format('wav')
           .output(audioPath)
           .on('end', () => resolve())
@@ -648,9 +658,15 @@ export class MediaService {
 
       // Transcribe audio
       // Note: whisper-node requires models to be downloaded first via: npx whisper-node download
-      const result = (await whisper(audioPath, {
-        modelName: 'base', // Use base model (can be 'tiny', 'base', 'small', 'medium', 'large')
-      })) as Array<{
+      const whisperOptions: Record<string, unknown> = {
+        modelName: 'medium', // Use base model (can be 'tiny', 'base', 'small', 'medium', 'large')
+        whisperOptions: {
+          language: dto.language || 'auto', // Use specified language or auto-detect
+          word_timestamps: true, // Get timestamps for every word for better precision
+        },
+      };
+
+      const result = (await whisper(audioPath, whisperOptions)) as Array<{
         start: string;
         end: string;
         speech: string;
