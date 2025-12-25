@@ -587,16 +587,28 @@ export class MediaController {
       (fields.outputFormat as 'txt' | 'srt' | 'vtt' | 'json') || 'txt';
 
     const result = await this.mediaService.transcribeVideo(fileBuffer, dto);
-    const buffer = await this.mediaService.getFileBuffer(result.filePath);
 
-    reply
-      .header('Content-Type', result.mimeType)
-      .header(
-        'Content-Disposition',
-        `attachment; filename="${result.filename}"`,
-      )
-      .header('Content-Length', buffer.length.toString())
-      .send(buffer);
+    // For text-based content, send the string directly to ensure proper UTF-8 encoding
+    if (result.content) {
+      reply
+        .header('Content-Type', result.mimeType)
+        .header(
+          'Content-Disposition',
+          `attachment; filename="${result.filename}"`,
+        )
+        .send(result.content);
+    } else {
+      // For binary content, read from file
+      const buffer = await this.mediaService.getFileBuffer(result.filePath);
+      reply
+        .header('Content-Type', result.mimeType)
+        .header(
+          'Content-Disposition',
+          `attachment; filename="${result.filename}"`,
+        )
+        .header('Content-Length', buffer.length.toString())
+        .send(buffer);
+    }
 
     this.mediaService.deleteFile(result.filePath).catch(() => {});
   }

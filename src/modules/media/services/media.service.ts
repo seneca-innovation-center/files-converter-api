@@ -605,7 +605,12 @@ export class MediaService {
   async transcribeVideo(
     fileBuffer: Buffer,
     dto: TranscribeVideoDto,
-  ): Promise<{ filePath: string; filename: string; mimeType: string }> {
+  ): Promise<{
+    filePath: string;
+    filename: string;
+    mimeType: string;
+    content?: string;
+  }> {
     const timestamp = Date.now();
     const randomString = Math.random().toString(36).substring(2, 15);
     const inputPath = join(this.tmpDir, `input_${timestamp}_${randomString}`);
@@ -659,7 +664,7 @@ export class MediaService {
       // Transcribe audio
       // Note: whisper-node requires models to be downloaded first via: npx whisper-node download
       const whisperOptions: Record<string, unknown> = {
-        modelName: 'medium', // Use base model (can be 'tiny', 'base', 'small', 'medium', 'large')
+        modelName: 'large-v1', // Use large model for better multilingual support including Arabic
         whisperOptions: {
           language: dto.language || 'auto', // Use specified language or auto-detect
           word_timestamps: true, // Get timestamps for every word for better precision
@@ -684,29 +689,37 @@ export class MediaService {
       if (outputFormat === 'json') {
         outputContent = JSON.stringify(result, null, 2);
         filename = `transcription_${timestamp}_${randomString}.json`;
-        mimeType = 'application/json';
+        mimeType = 'application/json; charset=utf-8';
       } else if (outputFormat === 'srt') {
         outputContent = this.formatAsSrt(result);
         filename = `transcription_${timestamp}_${randomString}.srt`;
-        mimeType = 'text/plain';
+        mimeType = 'text/plain; charset=utf-8';
       } else if (outputFormat === 'vtt') {
         outputContent = this.formatAsVtt(result);
         filename = `transcription_${timestamp}_${randomString}.vtt`;
-        mimeType = 'text/vtt';
+        mimeType = 'text/vtt; charset=utf-8';
       } else {
         // Default: plain text
         outputContent = result.map((segment) => segment.speech).join(' ');
         filename = `transcription_${timestamp}_${randomString}.txt`;
-        mimeType = 'text/plain';
+        mimeType = 'text/plain; charset=utf-8';
       }
 
       const filePath = join(this.tmpDir, filename);
-      await fs.writeFile(filePath, outputContent);
+      await fs.writeFile(filePath, outputContent, 'utf8');
+
+      // For text-based formats, also return the content directly
+      const isTextFormat =
+        outputFormat === 'json' ||
+        outputFormat === 'txt' ||
+        outputFormat === 'srt' ||
+        outputFormat === 'vtt';
 
       return {
         filePath,
         filename,
         mimeType,
+        ...(isTextFormat && { content: outputContent }),
       };
     } catch (error) {
       throw new InternalServerErrorException(
