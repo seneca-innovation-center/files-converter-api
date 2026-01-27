@@ -758,8 +758,9 @@ export class MediaService {
   private formatAsVtt(
     segments: Array<{ start: string; end: string; speech: string }>,
   ): string {
+    const groupedSegments = this.groupSegmentsForSrt(segments, 3);
     const header = 'WEBVTT\n\n';
-    const content = segments
+    const content = groupedSegments
       .map((segment) => {
         // VTT uses same format as whisper (HH:MM:SS.mmm)
         return `${segment.start} --> ${segment.end}\n${segment.speech}\n`;
