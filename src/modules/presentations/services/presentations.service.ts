@@ -7,6 +7,7 @@ import {
   Injectable,
   BadRequestException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as archiver from 'archiver';
@@ -25,6 +26,7 @@ import { CreatePresentationDto } from '../dtos/create-presentation.dto';
  */
 @Injectable()
 export class PresentationsService {
+  private readonly logger = new Logger(PresentationsService.name);
   private readonly tmpDir: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -38,6 +40,8 @@ export class PresentationsService {
     dto: CreatePresentationDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log(`Creating presentation: ${dto.title}`);
+
       const pptx = new PptxGenJS();
       pptx.author = 'Files Converter API';
       pptx.company = 'Converter API';
@@ -113,6 +117,8 @@ export class PresentationsService {
     dto: ConvertPresentationDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log(`Converting presentation to ${dto.targetFormat}`);
+
       const timestamp = Date.now();
       const randomString = Math.random().toString(36).substring(2, 15);
       const inputPath = join(

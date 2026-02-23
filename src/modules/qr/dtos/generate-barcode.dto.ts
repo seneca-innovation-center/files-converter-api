@@ -12,7 +12,7 @@ import {
 /**
  * Supported barcode formats
  */
-export enum BarcodeFormat {
+enum BarcodeFormat {
   CODE128 = 'CODE128',
   EAN13 = 'EAN13',
   EAN8 = 'EAN8',

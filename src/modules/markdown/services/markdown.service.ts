@@ -3,6 +3,7 @@ import { join } from 'path';
 
 import {
   Injectable,
+  Logger,
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -22,6 +23,7 @@ import {
  */
 @Injectable()
 export class MarkdownService {
+  private readonly logger = new Logger(MarkdownService.name);
   private readonly tmpDir: string;
   private readonly turndownService: TurndownServiceType;
 
@@ -45,6 +47,7 @@ export class MarkdownService {
     dto: ConvertMarkdownDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log(`Converting markdown to ${dto.targetFormat}`);
       const markdownText = fileBuffer.toString('utf-8');
       const timestamp = Date.now();
       const randomString = Math.random().toString(36).substring(2, 15);
@@ -123,6 +126,7 @@ export class MarkdownService {
     fileBuffer: Buffer,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log('Converting HTML to markdown');
       const html = fileBuffer.toString('utf-8');
       const markdown = this.turndownService.turndown(html);
 

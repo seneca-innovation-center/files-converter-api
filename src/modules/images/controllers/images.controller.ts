@@ -5,6 +5,7 @@ import {
   Res,
   BadRequestException,
   UseGuards,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,6 +29,8 @@ import { ImagesService } from '../services/images.service';
 @ApiTags('images')
 @Controller('images')
 export class ImagesController {
+  private readonly logger = new Logger(ImagesController.name);
+
   /**
    * Creates an instance of ImagesController.
    * @param imagesService Service for image processing operations
@@ -145,17 +148,9 @@ export class ImagesController {
       dto.colorVectorization =
         fields.colorVectorization === 'true' ? true : undefined;
 
-      // Log conversion parameters for debugging
-      console.info('Conversion parameters:', {
-        format: dto.format,
-        width: dto.width,
-        height: dto.height,
-        quality: dto.quality,
-        removeBackground: dto.removeBackground,
-        colorVectorization: dto.colorVectorization,
-        fileSize: fileBuffer.length,
-        filename,
-      });
+      this.logger.log(
+        `Converting ${filename} to ${dto.format}, size: ${fileBuffer.length}`,
+      );
 
       // Validate the format is supported
       if (!Object.values(ImageFormat).includes(dto.format)) {
@@ -176,16 +171,9 @@ export class ImagesController {
         result.filePath,
       );
 
-      console.info('Sending response:', {
-        mimeType: result.mimeType,
-        filename: result.filename,
-        bufferSize: resultBuffer.length,
-        isBuffer: Buffer.isBuffer(resultBuffer),
-        firstBytes: resultBuffer.slice(0, 10).toString('hex'),
-      });
-
-      // For debugging: Log the file path so you can check it manually
-      console.info('Converted file saved at:', result.filePath);
+      this.logger.debug(
+        `Sending ${result.mimeType}, size: ${resultBuffer.length}`,
+      );
 
       // Set response headers for file download
       await reply
@@ -196,7 +184,7 @@ export class ImagesController {
         )
         .send(resultBuffer);
 
-      console.info('Response sent successfully');
+      this.logger.debug('Response sent successfully');
 
       // Clean up temporary file after sending (fire and forget)
       // Delayed by 60 seconds for debugging
@@ -206,8 +194,10 @@ export class ImagesController {
         });
       }, 60000);
     } catch (error) {
-      // Log error for debugging
-      console.error('Image conversion error:', error);
+      this.logger.error(
+        'Image conversion failed',
+        error instanceof Error ? error.stack : undefined,
+      );
 
       // Re-throw if it's already a NestJS exception
       if (error instanceof BadRequestException) {

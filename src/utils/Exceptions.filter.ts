@@ -4,11 +4,14 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { FastifyReply } from 'fastify';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
+  private readonly logger = new Logger(AllExceptionsFilter.name);
+
   /**
    * Handles exceptions thrown during request processing.
    * Determines the appropriate HTTP status code and message to send as a response.
@@ -39,6 +42,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = error.message;
     } else {
       message = 'Internal server error';
+    }
+
+    if (status >= 500) {
+      this.logger.error(
+        `${status} ${message}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    } else {
+      this.logger.warn(`${status} ${message}`);
     }
 
     void response.status(status).send({

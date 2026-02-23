@@ -5,6 +5,7 @@ import {
   Injectable,
   BadRequestException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
@@ -31,6 +32,7 @@ import { SplitPdfDto, FillPdfFormDto } from '../dtos/pdf-operations.dto';
  */
 @Injectable()
 export class FilesService {
+  private readonly logger = new Logger(FilesService.name);
   private readonly tmpDir: string;
 
   /**
@@ -69,6 +71,8 @@ export class FilesService {
 
       const sourceExt = originalFilename.split('.').pop()?.toLowerCase();
       const targetExt = dto.targetFormat.toLowerCase();
+
+      this.logger.log(`Converting ${sourceExt} to ${targetExt}`);
 
       // Basic validation
       if (sourceExt === targetExt) {
@@ -325,6 +329,8 @@ export class FilesService {
         throw new BadRequestException('At least one PDF file is required');
       }
 
+      this.logger.log(`Merging ${pdfBuffers.length} PDFs`);
+
       const mergedPdf = await PDFDocument.create();
 
       for (const pdfBuffer of pdfBuffers) {
@@ -362,6 +368,8 @@ export class FilesService {
     dto: SplitPdfDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log('Splitting PDF');
+
       const pdf = await PDFDocument.load(pdfBuffer);
       const totalPages = pdf.getPageCount();
 
@@ -457,6 +465,8 @@ export class FilesService {
     dto: FillPdfFormDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log('Filling PDF form');
+
       const pdf = await PDFDocument.load(pdfBuffer);
       const form = pdf.getForm();
 
@@ -518,6 +528,8 @@ export class FilesService {
     _chartIndex: number = 0,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log('Exporting Excel chart');
+
       const workbook = new ExcelJS.Workbook();
       // ExcelJS expects Buffer or ArrayBuffer
       // Convert Buffer to ArrayBuffer to satisfy type requirements

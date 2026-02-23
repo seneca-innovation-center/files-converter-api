@@ -9,6 +9,7 @@ import {
   Injectable,
   BadRequestException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as archiver from 'archiver';
@@ -22,6 +23,7 @@ import { Convert3DDto, ThreeDFormat } from '../dtos/convert-3d.dto';
  */
 @Injectable()
 export class ThreeDService {
+  private readonly logger = new Logger(ThreeDService.name);
   private readonly tmpDir: string;
 
   /**
@@ -74,6 +76,8 @@ export class ThreeDService {
     dto: Convert3DDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log(`Converting 3D model to ${dto.format}`);
+
       const detectedFormat = this.detectFormat(fileBuffer, originalFilename);
 
       if (
@@ -915,6 +919,8 @@ Objects:  {
     dto: Extract3DDataDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log(`Extracting ${dto.extractType} from 3D model`);
+
       // Load Draco module
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const dracoModule = require('draco3dgltf');

@@ -2,7 +2,7 @@ import { Expose, Transform } from 'class-transformer';
 
 import { UserRole } from '../models/user.schema';
 
-export function TransformMongoId(options?: { toPlainOnly?: boolean }) {
+function TransformMongoId(options?: { toPlainOnly?: boolean }) {
   return (target: UsersSerialize, propertyKey: string): void => {
     Transform((params) => params.obj[propertyKey]?.toString(), options)(
       target,

@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { FastifyRequest } from 'fastify';
 
@@ -10,6 +11,8 @@ import { AuthService } from '../services/auth.service';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
+  private readonly logger = new Logger(AuthGuard.name);
+
   constructor(private readonly authService: AuthService) {}
 
   /**
@@ -43,7 +46,7 @@ export class AuthGuard implements CanActivate {
 
       return true;
     } catch (error) {
-      console.error('Token verification error:', error.message);
+      this.logger.error(`Token verification failed: ${error.message}`);
       throw new UnauthorizedException('Invalid token');
     }
   }

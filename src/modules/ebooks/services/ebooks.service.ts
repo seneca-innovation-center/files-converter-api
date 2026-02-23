@@ -5,6 +5,7 @@ import {
   Injectable,
   BadRequestException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Epub from 'epub-gen';
@@ -19,6 +20,7 @@ import { CreateEbookDto, EbookSourceFormat } from '../dtos/convert-ebook.dto';
  */
 @Injectable()
 export class EbooksService {
+  private readonly logger = new Logger(EbooksService.name);
   private readonly tmpDir: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -32,6 +34,8 @@ export class EbooksService {
     dto: CreateEbookDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log(`Creating EPUB: ${dto.title}`);
+
       const timestamp = Date.now();
       const randomString = Math.random().toString(36).substring(2, 15);
       const filename = `ebook_${timestamp}_${randomString}.epub`;
@@ -88,6 +92,8 @@ export class EbooksService {
     dto: ConvertEbookDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log(`Converting EPUB to ${dto.targetFormat}`);
+
       const timestamp = Date.now();
       const randomString = Math.random().toString(36).substring(2, 15);
       const inputPath = join(

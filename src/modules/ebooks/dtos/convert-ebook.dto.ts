@@ -8,7 +8,6 @@ export enum EbookTargetFormat {
 }
 
 export enum EbookSourceFormat {
-  EPUB = 'epub',
   HTML = 'html',
   TXT = 'txt',
 }

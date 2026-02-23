@@ -7,6 +7,7 @@ import {
   Injectable,
   BadRequestException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as sharp from 'sharp';
@@ -22,6 +23,7 @@ const potrace = require('potrace');
  */
 @Injectable()
 export class ImagesService {
+  private readonly logger = new Logger(ImagesService.name);
   private readonly tmpDir: string;
 
   /**
@@ -52,20 +54,15 @@ export class ImagesService {
         throw new BadRequestException('Invalid image file format');
       }
 
-      console.info('Input image metadata:', {
-        format: metadata.format,
-        width: metadata.width,
-        height: metadata.height,
-        space: metadata.space,
-        channels: metadata.channels,
-        hasAlpha: metadata.hasAlpha,
-      });
+      this.logger.log(
+        `Input image: ${metadata.format} ${metadata.width}x${metadata.height}`,
+      );
 
       let processedBuffer = fileBuffer;
 
       // Remove background if requested
       if (dto.removeBackground) {
-        console.info('Applying background removal...');
+        this.logger.log('Applying background removal');
         try {
           // Convert buffer to PNG format first (background removal library works best with PNG)
           const pngBuffer = await sharp(processedBuffer).png().toBuffer();
@@ -77,7 +74,7 @@ export class ImagesService {
           );
           await fs.writeFile(tempInputPath, pngBuffer);
 
-          console.info('Calling removeBackground with file path...');
+          this.logger.debug('Calling removeBackground with file path');
           const blobResult = await removeBackground(tempInputPath);
 
           // Clean up temp file
@@ -104,12 +101,14 @@ export class ImagesService {
                 : (blobResult as unknown as ArrayBuffer);
             processedBuffer = Buffer.from(arrayBuffer);
           }
-          console.info(
-            'Background removal complete, buffer size:',
-            processedBuffer.length,
+          this.logger.debug(
+            `Background removal complete, buffer size: ${processedBuffer.length}`,
           );
         } catch (error) {
-          console.error('Background removal error:', error);
+          this.logger.error(
+            'Background removal failed',
+            (error as Error).stack,
+          );
           throw new InternalServerErrorException(
             'Failed to remove background: ' + (error as Error).message,
           );
@@ -193,10 +192,9 @@ export class ImagesService {
         convertedBuffer = await sharpInstance.toBuffer();
       }
 
-      console.info('Conversion complete:', {
-        outputSize: convertedBuffer.length,
-        targetFormat: dto.format,
-      });
+      this.logger.log(
+        `Conversion complete: ${dto.format}, size: ${convertedBuffer.length}`,
+      );
 
       // Validate output buffer is not empty
       if (convertedBuffer.length === 0) {
@@ -228,18 +226,11 @@ export class ImagesService {
       // Verify the written file is valid by reading it back (skip for SVG)
       if (dto.format !== ImageFormat.SVG) {
         const verifyMetadata = await sharp(convertedBuffer).metadata();
-        console.info('Output image verification:', {
-          format: verifyMetadata.format,
-          width: verifyMetadata.width,
-          height: verifyMetadata.height,
-          channels: verifyMetadata.channels,
-          size: convertedBuffer.length,
-        });
+        this.logger.debug(
+          `Output: ${verifyMetadata.format} ${verifyMetadata.width}x${verifyMetadata.height}`,
+        );
       } else {
-        console.info('SVG output:', {
-          size: convertedBuffer.length,
-          format: 'svg',
-        });
+        this.logger.debug(`SVG output: ${convertedBuffer.length} bytes`);
       }
 
       // Determine MIME type
