@@ -16,8 +16,8 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
+import { AuthGuard } from '../../auth/guards/auth.guard';
 import { ConvertFileDto } from '../dtos/convert-file.dto';
 import { SplitPdfDto, FillPdfFormDto } from '../dtos/pdf-operations.dto';
 import { FilesService } from '../services/files.service';

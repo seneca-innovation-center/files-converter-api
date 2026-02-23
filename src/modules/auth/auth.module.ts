@@ -6,8 +6,8 @@ import { mongodbAdapter } from 'better-auth/adapters/mongodb';
 import { bearer } from 'better-auth/plugins/bearer';
 import type { Db, MongoClient } from 'mongodb';
 import { Connection } from 'mongoose';
-import { MONGOOSE_MODELS } from 'src/database';
 
+import { MONGOOSE_MODELS } from '../../database';
 import { UsersModule } from '../users/users.module';
 
 import { BETTER_AUTH } from './constants/auth.constants';

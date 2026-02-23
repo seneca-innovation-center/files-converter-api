@@ -15,8 +15,8 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
+import { AuthGuard } from '../../auth/guards/auth.guard';
 import { ConvertImageDto, ImageFormat } from '../dtos/convert-image.dto';
 import { ImagesService } from '../services/images.service';
 

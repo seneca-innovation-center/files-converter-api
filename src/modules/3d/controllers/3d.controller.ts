@@ -16,8 +16,8 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
+import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Extract3DDataDto, ExtractType } from '../dtos/3d-operations.dto';
 import { Convert3DDto, ThreeDFormat } from '../dtos/convert-3d.dto';
 import { ThreeDService } from '../services/3d.service';
