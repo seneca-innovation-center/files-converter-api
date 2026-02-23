@@ -9,30 +9,6 @@ import {
 } from 'class-validator';
 
 /**
- * Supported video formats
- */
-export enum VideoFormat {
-  MP4 = 'mp4',
-  WEBM = 'webm',
-  AVI = 'avi',
-  MOV = 'mov',
-  MKV = 'mkv',
-  GIF = 'gif',
-}
-
-/**
- * Supported audio formats
- */
-export enum AudioFormat {
-  MP3 = 'mp3',
-  WAV = 'wav',
-  OGG = 'ogg',
-  FLAC = 'flac',
-  AAC = 'aac',
-  M4A = 'm4a',
-}
-
-/**
  * DTO for media conversion request
  */
 export class ConvertMediaDto {

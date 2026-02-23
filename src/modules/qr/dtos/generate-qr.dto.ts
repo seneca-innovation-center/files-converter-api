@@ -12,7 +12,7 @@ import {
 /**
  * Supported QR code error correction levels
  */
-export enum QrErrorCorrectionLevel {
+enum QrErrorCorrectionLevel {
   LOW = 'L',
   MEDIUM = 'M',
   QUARTILE = 'Q',

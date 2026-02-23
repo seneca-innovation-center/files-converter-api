@@ -5,6 +5,7 @@ import {
   Injectable,
   InternalServerErrorException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as ffmpeg from 'fluent-ffmpeg';
@@ -27,6 +28,7 @@ ffmpeg.setFfmpegPath(ffmpegPath as string);
  */
 @Injectable()
 export class MediaService {
+  private readonly logger = new Logger(MediaService.name);
   private readonly tmpDir: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -54,6 +56,8 @@ export class MediaService {
     try {
       // Write input buffer to temporary file
       await fs.writeFile(inputPath, fileBuffer);
+
+      this.logger.log(`Converting media to ${dto.targetFormat}`);
 
       // Perform conversion
       await this.convertWithFfmpeg(inputPath, outputPath, dto);
@@ -98,6 +102,8 @@ export class MediaService {
 
     try {
       await fs.writeFile(inputPath, fileBuffer);
+
+      this.logger.log(`Extracting audio as ${audioFormat}`);
 
       // First, check if the file has an audio stream
       const hasAudio = await this.checkAudioStream(inputPath);
@@ -312,6 +318,8 @@ export class MediaService {
     try {
       await fs.writeFile(inputPath, fileBuffer);
 
+      this.logger.log('Trimming video');
+
       const duration = dto.endTime - dto.startTime;
 
       await new Promise<void>((resolve, reject) => {
@@ -359,6 +367,8 @@ export class MediaService {
     const outputPath = join(this.tmpDir, filename);
 
     try {
+      this.logger.log(`Merging ${videoBuffers.length} videos`);
+
       // Write all input files
       for (let i = 0; i < videoBuffers.length; i++) {
         const inputPath = join(
@@ -618,6 +628,8 @@ export class MediaService {
     try {
       await fs.writeFile(inputPath, fileBuffer);
 
+      this.logger.log('Transcribing video');
+
       // First, extract audio from video
       const audioPath = join(
         this.tmpDir,
@@ -647,35 +659,40 @@ export class MediaService {
           .run();
       });
 
-      // Use whisper-node for transcription
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const whisperModule = require('whisper-node');
-      // whisper-node exports both named and default, use default or named export
-      const whisper =
-        whisperModule.default || whisperModule.whisper || whisperModule;
-      // whisper-node returns: [{start: "00:00:14.310", end: "00:00:16.480", speech: "text"}]
+      // Use @huggingface/transformers for transcription (open-source Whisper)
+      const { pipeline } = await import('@huggingface/transformers');
 
-      if (typeof whisper !== 'function') {
-        throw new Error(
-          'whisper-node is not properly installed or models are missing. Run: npx whisper-node download',
-        );
-      }
+      const transcriber = await pipeline(
+        'automatic-speech-recognition',
+        'onnx-community/whisper-large-v3-turbo',
+        { dtype: 'q4' }, // Quantized for faster inference
+      );
 
-      // Transcribe audio
-      // Note: whisper-node requires models to be downloaded first via: npx whisper-node download
-      const whisperOptions: Record<string, unknown> = {
-        modelName: 'large-v1', // Use large model for better multilingual support including Arabic
-        whisperOptions: {
-          language: dto.language || 'auto', // Use specified language or auto-detect
-          word_timestamps: true, // Get timestamps for every word for better precision
-        },
+      const transcriptionResult = await transcriber(audioPath, {
+        language: dto.language || undefined,
+        return_timestamps: true,
+        chunk_length_s: 30,
+        stride_length_s: 5,
+      });
+
+      // Transform to unified segment format
+      const rawResult = transcriptionResult as {
+        text: string;
+        chunks?: Array<{ timestamp: [number, number]; text: string }>;
       };
 
-      const result = (await whisper(audioPath, whisperOptions)) as Array<{
-        start: string;
-        end: string;
-        speech: string;
-      }>;
+      const result: Array<{ start: string; end: string; speech: string }> =
+        rawResult.chunks?.map((chunk) => ({
+          start: this.secondsToTimestamp(chunk.timestamp[0]),
+          end: this.secondsToTimestamp(chunk.timestamp[1]),
+          speech: chunk.text.trim(),
+        })) || [
+          {
+            start: '00:00:00.000',
+            end: '00:00:00.000',
+            speech: rawResult.text,
+          },
+        ];
 
       // Clean up audio file
       await this.deleteFile(audioPath);
@@ -814,6 +831,15 @@ export class MediaService {
     }
 
     return grouped;
+  }
+
+  private secondsToTimestamp(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    const wholeSecs = Math.floor(secs);
+    const ms = Math.round((secs - wholeSecs) * 1000);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(wholeSecs).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
   }
 
   private timestampToSeconds(timestamp: string): number {

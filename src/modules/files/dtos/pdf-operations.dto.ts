@@ -1,25 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsOptional, IsString, IsNumber, Min } from 'class-validator';
-
-export class MergePdfDto {
-  @ApiProperty({
-    description: 'Array of PDF files to merge (in order)',
-    type: 'array',
-    items: {
-      type: 'string',
-      format: 'binary',
-    },
-  })
-  @IsArray()
-  files: Array<{
-    type: 'file';
-    fieldname: string;
-    filename?: string;
-    encoding: string;
-    mimetype: string;
-    file: AsyncIterable<Buffer>;
-  }>;
-}
+import { IsOptional, IsString, IsNumber, Min } from 'class-validator';
 
 export class SplitPdfDto {
   @ApiProperty({

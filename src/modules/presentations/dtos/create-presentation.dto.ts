@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsString, IsOptional, IsArray, ValidateNested } from 'class-validator';
 
-export class SlideContentDto {
+class SlideContentDto {
   @ApiProperty({
     description: 'Title of the slide',
     example: 'Introduction',

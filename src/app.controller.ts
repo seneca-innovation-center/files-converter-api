@@ -19,26 +19,4 @@ export class AppController {
   getWelcome(): { message: string } {
     return { message: 'Welcome to App Name API' };
   }
-
-  @Get('health')
-  @ApiOperation({ summary: 'Health check' })
-  @ApiResponse({
-    status: 200,
-    description: 'Health check status',
-    schema: {
-      type: 'object',
-      properties: {
-        status: { type: 'string' },
-        timestamp: { type: 'string' },
-        uptime: { type: 'number' },
-      },
-    },
-  })
-  getHealth(): { status: string; timestamp: string; uptime: number } {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-    };
-  }
 }

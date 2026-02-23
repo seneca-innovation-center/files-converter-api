@@ -1,0 +1,155 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Select runner'
+        required: true
+        type: choice
+        options:
+          - ubuntu-latest
+          - self-hosted
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from package.json
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check if tag already exists
+        id: check_tag
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate changelog
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+
+          # Find the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="HEAD"
+            HEADER="## What's Changed in $TAG"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+            HEADER="## What's Changed ($PREV_TAG -> $TAG)"
+          fi
+
+          # Collect commits and categorize them (conventional commits)
+          FEATURES=""
+          FIXES=""
+          REFACTOR=""
+          PERF=""
+          DOCS=""
+          MAINTENANCE=""
+          OTHER=""
+
+          while IFS= read -r line; do
+            HASH=$(echo "$line" | cut -d' ' -f1)
+            MSG=$(echo "$line" | cut -d' ' -f2-)
+            SHORT_HASH="${HASH:0:7}"
+            ENTRY="- ${MSG} (\`${SHORT_HASH}\`)"
+
+            case "$MSG" in
+              feat:*|feat\(*)
+                FEATURES="${FEATURES}${ENTRY}"$'\n'
+                ;;
+              fix:*|fix\(*)
+                FIXES="${FIXES}${ENTRY}"$'\n'
+                ;;
+              refactor:*|refactor\(*)
+                REFACTOR="${REFACTOR}${ENTRY}"$'\n'
+                ;;
+              perf:*|perf\(*)
+                PERF="${PERF}${ENTRY}"$'\n'
+                ;;
+              docs:*|docs\(*)
+                DOCS="${DOCS}${ENTRY}"$'\n'
+                ;;
+              chore:*|chore\(*|ci:*|ci\(*|build:*|build\(*|style:*|style\(*|test:*|test\(*)
+                MAINTENANCE="${MAINTENANCE}${ENTRY}"$'\n'
+                ;;
+              Merge\ *|Revert\ *)
+                ;;
+              *)
+                OTHER="${OTHER}${ENTRY}"$'\n'
+                ;;
+            esac
+          done < <(git log "$RANGE" --pretty=format:"%H %s" --no-merges)
+
+          # Build changelog body
+          {
+            echo "$HEADER"
+            echo ""
+
+            if [ -n "$FEATURES" ]; then
+              echo "### New Features"
+              echo "$FEATURES"
+            fi
+            if [ -n "$FIXES" ]; then
+              echo "### Bug Fixes"
+              echo "$FIXES"
+            fi
+            if [ -n "$PERF" ]; then
+              echo "### Performance"
+              echo "$PERF"
+            fi
+            if [ -n "$REFACTOR" ]; then
+              echo "### Refactoring"
+              echo "$REFACTOR"
+            fi
+            if [ -n "$DOCS" ]; then
+              echo "### Documentation"
+              echo "$DOCS"
+            fi
+            if [ -n "$MAINTENANCE" ]; then
+              echo "### Maintenance"
+              echo "$MAINTENANCE"
+            fi
+            if [ -n "$OTHER" ]; then
+              echo "### Other Changes"
+              echo "$OTHER"
+            fi
+
+            REPO_URL="${{ github.server_url }}/${{ github.repository }}"
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full Changelog**: ${REPO_URL}/compare/${PREV_TAG}...${TAG}"
+            fi
+          } > /tmp/changelog.md
+
+      - name: Create tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body_path: /tmp/changelog.md

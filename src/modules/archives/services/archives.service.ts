@@ -9,6 +9,7 @@ import {
   Injectable,
   BadRequestException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as archiver from 'archiver';
@@ -22,6 +23,7 @@ import { CreateArchiveDto, ArchiveFormat } from '../dtos/create-archive.dto';
  */
 @Injectable()
 export class ArchivesService {
+  private readonly logger = new Logger(ArchivesService.name);
   private readonly tmpDir: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -42,6 +44,10 @@ export class ArchivesService {
       if (!files || files.length === 0) {
         throw new BadRequestException('No files provided for archiving');
       }
+
+      this.logger.log(
+        `Creating ${dto.format} archive with ${files.length} files`,
+      );
 
       const timestamp = Date.now();
       const randomString = Math.random().toString(36).substring(2, 15);
@@ -90,6 +96,8 @@ export class ArchivesService {
     originalFilename: string,
   ): Promise<Array<{ filename: string; buffer: Buffer }>> {
     try {
+      this.logger.log(`Extracting archive: ${originalFilename}`);
+
       const extension = originalFilename.split('.').pop()?.toLowerCase();
 
       if (extension === 'zip') {

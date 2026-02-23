@@ -40,15 +40,11 @@ import { AuthService } from './services/auth.service';
           .map((origin) => origin.trim())
           .filter(Boolean);
 
-        const resolvedClient =
+        const resolvedClient: MongoClient =
           typeof (connection as { getClient?: () => MongoClient }).getClient ===
           'function'
-            ? (
-                connection as {
-                  getClient: () => MongoClient;
-                }
-              ).getClient()
-            : (connection as unknown as { client?: MongoClient }).client;
+            ? (connection as { getClient: () => MongoClient }).getClient()
+            : (connection as unknown as { client: MongoClient }).client;
 
         if (!resolvedClient) {
           throw new Error('Unable to resolve MongoDB client instance');

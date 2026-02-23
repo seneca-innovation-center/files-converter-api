@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { join } from 'path';
 
 import { Module } from '@nestjs/common';
@@ -8,6 +9,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+import { LoggerModule } from 'nestjs-pino';
 
 import { AppController } from './app.controller';
 import { ThreeDModule } from './modules/3d/3d.module';
@@ -16,6 +18,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CodeModule } from './modules/code/code.module';
 import { EbooksModule } from './modules/ebooks/ebooks.module';
 import { FilesModule } from './modules/files/files.module';
+import { HealthModule } from './modules/health/health.module';
 import { ImagesModule } from './modules/images/images.module';
 import { MarkdownModule } from './modules/markdown/markdown.module';
 import { MediaModule } from './modules/media/media.module';
@@ -30,6 +33,34 @@ import { TempFileCleanupService } from './utils/temp-file-cleanup.service';
     // Global configuration module for environment variables and app settings
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    // Structured logging with Pino (Fastify-native logger)
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level:
+          process.env.LOG_LEVEL ||
+          (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
+        transport:
+          process.env.NODE_ENV !== 'production'
+            ? { target: 'pino-pretty', options: { colorize: true } }
+            : undefined,
+        genReqId: (req) =>
+          (req.headers['x-request-id'] as string) || randomUUID(),
+        serializers: {
+          req(req) {
+            return { id: req.id, method: req.method, url: req.url };
+          },
+          res(res) {
+            return { statusCode: res.statusCode };
+          },
+        },
+        customLogLevel: (_req, res, err) => {
+          if (res.statusCode >= 500 || err) return 'error';
+          if (res.statusCode >= 400) return 'warn';
+          return 'info';
+        },
+        redact: ['req.headers.authorization', 'req.headers.cookie'],
+      },
     }),
     // Task scheduling module for cron jobs and intervals (used for temp file cleanup)
     ScheduleModule.forRoot(),
@@ -92,6 +123,7 @@ import { TempFileCleanupService } from './utils/temp-file-cleanup.service';
     EbooksModule,
     UsersModule,
     AuthModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [

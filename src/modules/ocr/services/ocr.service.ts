@@ -1,7 +1,11 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createWorker } from 'tesseract.js';
 
@@ -12,6 +16,7 @@ import { ExtractTextDto, OcrLanguage } from '../dtos/extract-text.dto';
  */
 @Injectable()
 export class OcrService {
+  private readonly logger = new Logger(OcrService.name);
   private readonly tmpDir: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -35,6 +40,7 @@ export class OcrService {
   }> {
     try {
       const language = dto.language || OcrLanguage.ENGLISH;
+      this.logger.log(`OCR extraction, language: ${language}`);
       const outputFormat = dto.outputFormat || 'txt';
 
       // Create Tesseract worker

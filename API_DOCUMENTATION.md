@@ -835,7 +835,7 @@ const response2 = await fetch('http://localhost:3001/api/media/subtitles', {
 
 ### POST `/api/media/transcribe`
 
-Transcribe video to text using speech recognition (OpenAI Whisper).
+Transcribe video to text using speech recognition (Whisper via @huggingface/transformers).
 
 **Request Type**: `multipart/form-data`
 
@@ -858,7 +858,7 @@ Transcribe video to text using speech recognition (OpenAI Whisper).
 
 **Response**: Transcription file in the requested format
 
-**Note**: Requires Whisper models to be downloaded first. Run `npx whisper-node download` to download the model (recommended: `base` model for multi-language support).
+**Note**: Uses `whisper-large-v3-turbo` model via `@huggingface/transformers`. The model is downloaded automatically on first use.
 
 **Example**:
 
@@ -2519,23 +2519,9 @@ The PPTX to PDF/Image conversion feature requires LibreOffice to be installed on
 
 **Note**: Without LibreOffice, PPTX conversion endpoints will fail. The `createPresentation` endpoint (creating PPTX from data) does not require LibreOffice.
 
-### Whisper Models (Required for Video Transcription)
+### Whisper Models (Video Transcription)
 
-The video transcription feature requires Whisper models to be downloaded first.
-
-**Installation**:
-
-```bash
-npx whisper-node download
-```
-
-When prompted, select a model:
-
-- **Recommended**: `base` - Good balance of speed and accuracy, supports multiple languages (142 MB disk, ~500 MB RAM)
-- **Fastest**: `tiny` or `tiny.en` - Faster processing, lower accuracy (75 MB disk, ~390 MB RAM)
-- **Best Accuracy**: `large` - Highest accuracy, slower processing (2.9 GB disk, ~4.7 GB RAM)
-
-**Note**: Without Whisper models, video transcription endpoints will fail. Models are stored locally and used for all transcription requests.
+Video transcription uses `@huggingface/transformers` with the `whisper-large-v3-turbo` model (quantized q4). The model is downloaded automatically on first use and cached locally. No manual setup required.
 
 ---
 
@@ -2576,5 +2562,6 @@ When prompted, select a model:
 
 ---
 
-**Last Updated**: 2025
+**Last Updated**: 2026
+**Runtime**: Bun
 **API Version**: 1.0.0

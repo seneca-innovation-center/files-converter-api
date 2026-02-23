@@ -1,7 +1,11 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import hljs from 'highlight.js';
 import * as prettier from 'prettier';
@@ -13,6 +17,7 @@ import { FormatCodeDto, CodeLanguage } from '../dtos/format-code.dto';
  */
 @Injectable()
 export class CodeService {
+  private readonly logger = new Logger(CodeService.name);
   private readonly tmpDir: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -80,7 +85,9 @@ export class CodeService {
       const parser = this.getParser(language);
       return await prettier.format(code, { parser });
     } catch (error) {
-      console.error(error);
+      this.logger.warn(
+        `Prettier formatting failed: ${(error as Error).message}`,
+      );
       // If prettier fails, return original code
       return code;
     }

@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MailerService } from '@nestjs-modules/mailer';
 
 @Injectable()
 export class MailService {
+  private readonly logger = new Logger(MailService.name);
+
   /**
    * Creates an instance of the MailService.
    * @param mailerService The Mailer service for sending emails
@@ -25,6 +27,7 @@ export class MailService {
     firstName: string,
     lastName: string,
   ): Promise<void> {
+    this.logger.log(`Sending email to ${email}`);
     // Get the login URL from the configuration
     const loginUrl = this.configService.get<string>('FRONTEND_LOGIN_URL');
 

@@ -2,65 +2,25 @@ import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
-import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
+import {
+  ClassSerializerInterceptor,
+  Logger,
+  ValidationPipe,
+} from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-// import { IoAdapter } from '@nestjs/platform-socket.io';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as dotenv from 'dotenv';
-// import { Server, ServerOptions, Socket } from 'socket.io';
+import { Logger as PinoLogger } from 'nestjs-pino';
 
 // Load environment variables from .env file
 dotenv.config();
 
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './utils/Exceptions.filter';
-
-/**
- * Custom Socket.IO adapter that extends the default IoAdapter.
- * Configures CORS settings for WebSocket connections based on environment variables.
- */
-// export class SocketAdapter extends IoAdapter {
-/**
- * Creates and configures a Socket.IO server instance.
- * Parses allowed origins from BASE_URL environment variable and applies CORS settings.
- *
- * @param port The port number for the Socket.IO server
- * @param options Additional server options including namespace and server instance
- * @returns Configured Socket.IO server instance
- */
-// createIOServer(
-//   port: number,
-//   options?: ServerOptions & {
-//     namespace?: string;
-//     server?: unknown;
-//   },
-// ): Server {
-//   // Parse comma-separated list of allowed origins from environment variable
-//   const origins = process.env.BASE_URL?.split(',').map((url) => url.trim());
-
-//   return super.createIOServer(port, {
-//     ...options,
-//     cors: {
-//       origin: origins || '*',
-//       methods: ['GET', 'POST'],
-//     },
-//   });
-// }
-
-/**
- * Bind a callback function to the "connection" event on the given server.
- *
- * @param server The server to bind the callback to.
- * @param callback The callback to be invoked when a client connects.
- */
-//   bindClientConnect(server: Server, callback: (socket: Socket) => void): void {
-//     server.on('connection', callback);
-//   }
-// }
 
 /**
  * Application bootstrap function - Main entry point for the NestJS application.
@@ -72,7 +32,6 @@ import { AllExceptionsFilter } from './utils/Exceptions.filter';
  * - Static file serving
  * - API documentation via Swagger
  * - Global validation pipes, exception filters, and interceptors
- * - WebSocket support (optional)
  */
 async function bootstrap(): Promise<void> {
   // Create NestJS application with Fastify adapter for better performance
@@ -84,8 +43,12 @@ async function bootstrap(): Promise<void> {
     {
       rawBody: true, // Enable raw body for webhook signatures and similar use cases
       bodyParser: true, // Enable automatic body parsing
+      bufferLogs: true, // Buffer logs until Pino logger is attached
     },
   );
+
+  // Use Pino as the application logger
+  app.useLogger(app.get(PinoLogger));
 
   // Parse multiple URLs from BASE_URL and AUTH_TRUSTED_ORIGINS for CORS configuration
   const baseUrlOrigins =
@@ -151,26 +114,16 @@ async function bootstrap(): Promise<void> {
     prefix: '/public/', // Mount static files under /public/ URL path
   });
 
-  // === Root Level Routes (non-prefixed) ===
+  // === Root Level Route ===
 
   // Welcome endpoint - provides basic API information
   app.getHttpAdapter().get('/', async (_request, _reply) => {
     return { message: 'Welcome to App Name API' };
   });
 
-  // Health check endpoint - useful for monitoring and load balancers
-  app.getHttpAdapter().get('/health', async (_request, _reply) => {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(), // Server uptime in seconds
-    };
-  });
-
   // === Global Configuration ===
 
   // Apply 'api' prefix to all routes (e.g., /api/users, /api/auth)
-  // Root routes like / and /health remain unprefixed
   app.setGlobalPrefix('api');
 
   // Enable automatic validation for all DTOs using class-validator decorators
@@ -201,9 +154,10 @@ async function bootstrap(): Promise<void> {
   // Start the server on the specified port (default: 3001)
   const port = process.env.PORT || 3001;
   await app.listen(port, '0.0.0.0'); // Listen on all network interfaces
+
+  const logger = new Logger('Bootstrap');
+  logger.log(`API is running on port ${port}`);
 }
 
 // Initialize and start the application
-void bootstrap().then(() =>
-  console.info(`API is running on port ${process.env.PORT || 3001}`),
-);
+void bootstrap();

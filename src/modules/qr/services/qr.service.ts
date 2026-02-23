@@ -1,7 +1,11 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCanvas } from 'canvas';
 import * as jsbarcode from 'jsbarcode';
@@ -15,6 +19,7 @@ import { GenerateQrDto } from '../dtos/generate-qr.dto';
  */
 @Injectable()
 export class QrService {
+  private readonly logger = new Logger(QrService.name);
   private readonly tmpDir: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -30,6 +35,7 @@ export class QrService {
     dto: GenerateQrDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log('Generating QR code');
       const size = dto.size || 300;
       const color = {
         dark: dto.color || '#000000',
@@ -75,6 +81,7 @@ export class QrService {
     dto: GenerateBarcodeDto,
   ): Promise<{ filePath: string; filename: string; mimeType: string }> {
     try {
+      this.logger.log(`Generating barcode: ${dto.format}`);
       const width = dto.width || 200;
       const height = dto.height || 100;
       const displayValue = dto.displayValue !== false;

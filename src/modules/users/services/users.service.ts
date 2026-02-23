@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { plainToInstance } from 'class-transformer';
 import { Model } from 'mongoose';
@@ -10,6 +10,8 @@ import { UsersSerialize } from '../serializations/users.serialize';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectModel(User.name)
     private readonly userModel: Model<UserDocument>,
@@ -18,6 +20,7 @@ export class UsersService {
   async ensureUserFromAuth(
     payload: Pick<CreateUserDto, 'authId' | 'email' | 'fullName'>,
   ): Promise<UsersSerialize> {
+    this.logger.log(`Syncing user: ${payload.email}`);
     const normalizedEmail = payload.email.toLowerCase();
     let user = await this.userModel.findOne({ authId: payload.authId }).exec();
 
@@ -68,6 +71,7 @@ export class UsersService {
     id: string,
     dto: UpdateUserRoleDto,
   ): Promise<UsersSerialize> {
+    this.logger.log(`Updating role for user ${id}`);
     const user = await this.userModel.findById(id).exec();
     if (!user) {
       throw new NotFoundException('User not found');
@@ -83,6 +87,7 @@ export class UsersService {
   }
 
   async remove(id: string): Promise<void> {
+    this.logger.log(`Removing user ${id}`);
     const result = await this.userModel.findByIdAndDelete(id).exec();
     if (!result) {
       throw new NotFoundException('User not found');

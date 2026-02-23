@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsNumber, IsString, IsArray, Min } from 'class-validator';
+import { IsOptional, IsNumber, IsString, Min } from 'class-validator';
 
 export class TrimVideoDto {
   @ApiProperty({
@@ -17,26 +17,6 @@ export class TrimVideoDto {
   @IsNumber()
   @Min(0)
   endTime: number;
-}
-
-export class MergeVideosDto {
-  @ApiProperty({
-    description: 'Array of video files to merge',
-    type: 'array',
-    items: {
-      type: 'string',
-      format: 'binary',
-    },
-  })
-  @IsArray()
-  files: Array<{
-    type: 'file';
-    fieldname: string;
-    filename?: string;
-    encoding: string;
-    mimetype: string;
-    file: AsyncIterable<Buffer>;
-  }>;
 }
 
 export class ExtractFrameDto {

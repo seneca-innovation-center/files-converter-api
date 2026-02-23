@@ -1,6 +1,6 @@
 # Files Converter API
 
-A production-ready, open-source NestJS backend for file conversion web applications. Built with TypeScript, Fastify, and modern file processing libraries.
+A production-ready, open-source NestJS backend for file conversion web applications. Built with TypeScript, Fastify, and Bun runtime.
 
 ## Features
 
@@ -26,13 +26,14 @@ A production-ready, open-source NestJS backend for file conversion web applicati
 
 ## Tech Stack
 
+- **Runtime**: Bun
 - **Framework**: NestJS with Fastify adapter
 - **Language**: TypeScript
 - **Image Processing**: Sharp, @imgly/background-removal-node, potrace (SVG tracing)
 - **Document Processing**: mammoth (DOCX), pdf-parse v2 (PDF extraction), pdf-lib (PDF manipulation), pdfkit (PDF generation), xlsx (Excel), html-pdf-node, docx (DOCX generation), exceljs (Excel charts), chartjs-node-canvas (Chart rendering)
 - **Presentations**: pptxgenjs (PPTX creation), libreoffice-convert (PPTX conversion)
 - **Ebooks**: epub-gen (EPUB creation), epub-parser (EPUB reading)
-- **Media Processing**: fluent-ffmpeg, @ffmpeg-installer/ffmpeg, whisper-node (video transcription)
+- **Media Processing**: fluent-ffmpeg, FFmpeg, @huggingface/transformers (Whisper speech recognition)
 - **QR & Barcode**: qrcode, jsbarcode, canvas
 - **Archives**: archiver, unzipper, tar-stream
 - **Markdown**: marked, turndown
@@ -42,14 +43,12 @@ A production-ready, open-source NestJS backend for file conversion web applicati
 - **Validation**: class-validator, class-transformer
 - **Rate Limiting**: @nestjs/throttler
 - **Documentation**: Swagger/OpenAPI
+- **CI/CD**: GitHub Actions (release + deploy), commitlint, husky, knip
 
 ## Installation
 
 ```bash
 # Install dependencies
-npm install
-
-# Or with bun
 bun install
 ```
 
@@ -110,11 +109,11 @@ AUTH_TRUSTED_ORIGINS=http://localhost:3000
 
 ```bash
 # Development mode
-npm run dev
+bun run dev
 
 # Production mode
-npm run build
-npm run start:prod
+bun run build
+bun run start:prod
 ```
 
 ### Docker
@@ -124,14 +123,31 @@ npm run start:prod
 docker build -t files-converter-api .
 
 # Run the container
-docker run -p 3001:3001 files-converter-api
+docker run -d --name files-converter-api \
+  --restart unless-stopped \
+  -p 4001:4001 \
+  --env-file .env \
+  files-converter-api
 ```
 
-**Note**: For PPTX conversion features, you need LibreOffice installed. Update your Dockerfile:
+### Deployment
 
-```dockerfile
-RUN apt-get update && apt-get install -y libreoffice && rm -rf /var/lib/apt/lists/*
+The project includes CI/CD with GitHub Actions:
+
+1. **Release workflow** (`release.yml`): On push to `main`, detects version changes in `package.json`, creates a git tag and GitHub Release with a categorized changelog.
+2. **Deploy workflow** (`deploy.yml`): After a release is published, SSHes into the server, pulls the latest code, builds the Docker image, and restarts the container.
+
+**Version bumping**:
+
+```bash
+bun run release
 ```
+
+This interactively bumps the version in `package.json`, commits, tags, and pushes to `main`.
+
+**Required GitHub Secrets**: `SSH_HOST`, `SSH_USER`, `SSH_KEY`, `SSH_PORT`, `DEPLOY_PATH`
+
+**Commit conventions**: This project enforces [Conventional Commits](https://www.conventionalcommits.org/) via commitlint + husky. Use prefixes like `feat:`, `fix:`, `docs:`, `chore:`, etc.
 
 ## API Endpoints
 
@@ -394,7 +410,7 @@ Transcribe video to text using speech recognition (OpenAI Whisper).
 - `vtt`: WebVTT format with timestamps
 - `json`: Structured JSON with timestamps and text segments
 
-**Note**: Requires Whisper models to be downloaded first. Run `npx whisper-node download` to download the model (recommended: `base` model for multi-language support).
+**Note**: Uses `@huggingface/transformers` with the `whisper-large-v3-turbo` model. The model is downloaded automatically on first use.
 
 ### QR Codes & Barcodes
 
@@ -605,16 +621,19 @@ Temporary files are automatically cleaned up:
 
 ```bash
 # Run tests
-npm test
+bun run test
 
 # Run tests with coverage
-npm run test:cov
+bun run test:cov
 
 # Lint code
-npm run lint
+bun run lint
 
 # Format code
-npm run format
+bun run format
+
+# Check for unused deps/exports
+bun run knip
 ```
 
 ## Conversion Details
@@ -653,8 +672,8 @@ npm run format
 - Excel chart export extracts numeric data from worksheets and creates visualizations; works best with structured tables
 - PPTX conversion requires LibreOffice to be installed on the server (included in Dockerfile)
 - EPUB conversion preserves text content but may not maintain complex formatting
-- Video operations (trim, merge, subtitles, transcription) require FFmpeg (included via @ffmpeg-installer/ffmpeg)
-- Video transcription requires Whisper models to be downloaded: run `npx whisper-node download` and select a model (recommended: `base` for multi-language support)
+- Video operations (trim, merge, subtitles, transcription) require FFmpeg (installed via system package or @ffmpeg-installer/ffmpeg)
+- Video transcription uses `@huggingface/transformers` with `whisper-large-v3-turbo` (auto-downloaded on first use)
 - Large files (>5MB) are supported but may take longer to process
 - All temporary files are automatically cleaned up after 15 minutes
 

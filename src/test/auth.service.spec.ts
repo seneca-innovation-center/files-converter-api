@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import type { Auth } from 'better-auth';
 
 import { AuthService } from '../modules/auth/services/auth.service';
@@ -18,6 +19,7 @@ describe('AuthService', () => {
       {
         ensureUserFromAuth: mockEnsureUser,
       } as unknown as UsersService,
+      new ConfigService(),
     );
 
   beforeEach(() => {
