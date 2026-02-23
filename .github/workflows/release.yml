@@ -10,15 +10,15 @@ on:
         required: true
         type: choice
         options:
-          - ubuntu-latest
           - self-hosted
+          - ubuntu-latest
 
 permissions:
   contents: write
 
 jobs:
   release:
-    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner || 'self-hosted' }}
 
     steps:
       - name: Checkout code
