@@ -17,8 +17,8 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { AuthGuard } from 'src/modules/auth/guards/auth.guard';
 
+import { AuthGuard } from '../../auth/guards/auth.guard';
 import { CreateEbookDto } from '../dtos/convert-ebook.dto';
 import { ConvertEbookDto, EbookTargetFormat } from '../dtos/convert-ebook.dto';
 import { EbooksService } from '../services/ebooks.service';
