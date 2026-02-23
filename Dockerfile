@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY package.json bun.lock ./
+COPY package.json ./
 
 RUN bun install
 
