@@ -90,7 +90,7 @@ export class QrService {
       const canvas = createCanvas(width, height);
 
       // Generate barcode on canvas
-      jsbarcode(canvas as unknown as HTMLCanvasElement, dto.data, {
+      jsbarcode(canvas, dto.data, {
         format: dto.format,
         width: 2,
         height: height - (displayValue ? 20 : 0),

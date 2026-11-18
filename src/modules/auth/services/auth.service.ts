@@ -142,9 +142,7 @@ export class AuthService {
         } else {
           // For other types, try to use the raw stream if available
           if (request.raw.readable) {
-            body = Readable.toWeb(
-              request.raw as unknown as Readable,
-            ) as unknown as BodyInit;
+            body = Readable.toWeb(request.raw) as unknown as BodyInit;
           } else {
             // Fallback: serialize as JSON if it's an object, otherwise as string
             if (typeof request.body === 'object' && request.body !== null) {
@@ -162,9 +160,7 @@ export class AuthService {
         }
       } else if (request.raw.readable) {
         // Body hasn't been parsed yet, use the raw stream
-        body = Readable.toWeb(
-          request.raw as unknown as Readable,
-        ) as unknown as BodyInit;
+        body = Readable.toWeb(request.raw) as unknown as BodyInit;
       }
     }
 
