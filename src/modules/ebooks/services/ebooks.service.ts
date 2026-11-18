@@ -132,11 +132,11 @@ export class EbooksService {
         const pdfPromise = htmlPdf.generatePdf(
           { content: htmlContent },
           { format: 'A4' },
-        ) as unknown as Promise<Buffer>;
+        );
         const pdfBuffer = await pdfPromise;
         outputBuffer = Buffer.isBuffer(pdfBuffer)
           ? pdfBuffer
-          : Buffer.from(pdfBuffer as Uint8Array);
+          : Buffer.from(pdfBuffer);
         filename = `converted_${timestamp}_${randomString}.pdf`;
         mimeType = 'application/pdf';
       } else if (dto.targetFormat === EbookTargetFormat.HTML) {

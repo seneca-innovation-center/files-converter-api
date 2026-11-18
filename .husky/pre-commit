@@ -1,4 +1,4 @@
 bun run lint
 bun run test
 bun run build
-bun run knip
+bun run lint:knip

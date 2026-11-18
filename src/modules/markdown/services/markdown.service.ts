@@ -83,12 +83,12 @@ export class MarkdownService {
         const pdfPromise = htmlPdf.generatePdf(
           { content: styledHtml },
           { format: 'A4' },
-        ) as unknown as Promise<Buffer>;
+        );
 
         const pdfResult = await pdfPromise;
         convertedBuffer = Buffer.isBuffer(pdfResult)
           ? pdfResult
-          : Buffer.from(pdfResult as Uint8Array);
+          : Buffer.from(pdfResult);
         extension = 'pdf';
         mimeType = 'application/pdf';
       } else {

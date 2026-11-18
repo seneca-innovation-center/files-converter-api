@@ -242,8 +242,7 @@ export class ArchivesService {
           gunzip.write(buffer);
           gunzip.end();
         } else {
-          extract.write(buffer);
-          extract.end();
+          extract.end(buffer);
         }
       } catch (error) {
         reject(error as Error);

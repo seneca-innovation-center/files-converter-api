@@ -426,7 +426,7 @@ export class MediaController {
     dto.frameNumber = fields.frameNumber
       ? parseInt(fields.frameNumber, 10)
       : undefined;
-    dto.format = (fields.format as 'png' | 'jpeg') || 'png';
+    dto.format = fields.format || 'png';
 
     const result = await this.mediaService.extractFrame(fileBuffer, dto);
     const buffer = await this.mediaService.getFileBuffer(result.filePath);
@@ -510,8 +510,8 @@ export class MediaController {
     const dto = new SubtitleOperationDto();
     dto.subtitleFile = subtitleFile || undefined;
     dto.subtitleText = fields.subtitleText;
-    dto.operation = (fields.operation as 'extract' | 'embed') || 'extract';
-    dto.format = (fields.format as 'srt' | 'vtt' | 'ass') || 'srt';
+    dto.operation = fields.operation || 'extract';
+    dto.format = fields.format || 'srt';
 
     const result = await this.mediaService.handleSubtitles(fileBuffer, dto);
     const buffer = await this.mediaService.getFileBuffer(result.filePath);
