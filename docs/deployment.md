@@ -15,11 +15,11 @@ Configure these in **Settings → Secrets and variables → Actions**:
 
 | Secret | Example | Description |
 |--------|---------|-------------|
-| `SSH_HOST` | `192.168.1.100` or `pelonis` | Server hostname or IP |
-| `SSH_USER` | `pelonis` | SSH username |
+| `SSH_HOST` | `203.0.113.10` or `deploy.example.com` | Server hostname or IP |
+| `SSH_USER` | `deploy` | SSH username |
 | `SSH_KEY` | *(see below)* | Private SSH key (full PEM content) |
 | `SSH_PORT` | `22` | SSH port (defaults to 22) |
-| `DEPLOY_PATH` | `/home/pelonis/files-converter-api` | Absolute path to the project on the server |
+| `DEPLOY_PATH` | `/home/deploy/files-converter-api` | Absolute path to the project on the server |
 
 ### SSH_KEY
 
@@ -39,7 +39,7 @@ To generate a deploy key:
 ssh-keygen -t ed25519 -C "github-deploy" -f ~/.ssh/deploy_key
 
 # Copy the public key to the server
-ssh-copy-id -i ~/.ssh/deploy_key.pub pelonis@pelonis
+ssh-copy-id -i ~/.ssh/deploy_key.pub deploy@deploy.example.com
 
 # Copy the private key content — paste this into GitHub Secrets as SSH_KEY
 cat ~/.ssh/deploy_key
@@ -49,21 +49,21 @@ cat ~/.ssh/deploy_key
 
 ```bash
 # SSH into the server
-ssh pelonis@pelonis
+ssh deploy@deploy.example.com
 
 # Clone the repo
-git clone https://github.com/1devspace/files-converter-api.git /home/pelonis/files-converter-api
-cd /home/pelonis/files-converter-api
+git clone https://github.com/1devspace/files-converter-api.git /home/deploy/files-converter-api
+cd /home/deploy/files-converter-api
 
 # Create the .env file
 cat > .env << 'EOF'
 PORT=4001
 MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/files-converter
 BETTER_AUTH_SECRET=your-secret-here
-BASE_URL=https://converter.pelonis.seneca.center
-API_URL=https://api.converter.pelonis.seneca.center
-AUTH_TRUSTED_ORIGINS=https://converter.pelonis.seneca.center
-FRONTEND_LOGIN_URL=https://converter.pelonis.seneca.center/login
+BASE_URL=https://converter.example.com
+API_URL=https://api.converter.example.com
+AUTH_TRUSTED_ORIGINS=https://converter.example.com
+FRONTEND_LOGIN_URL=https://converter.example.com/login
 EOF
 ```
 
@@ -99,7 +99,7 @@ docker run -d \
   --name files-converter-api \
   --restart unless-stopped \
   -p 4001:4001 \
-  --env-file /home/pelonis/files-converter-api/.env \
+  --env-file /home/deploy/files-converter-api/.env \
   files-converter-api
 ```
 
@@ -114,15 +114,15 @@ docker run -d \
 
 | URL | Service |
 |-----|---------|
-| `api.converter.pelonis.seneca.center` | Backend API |
-| `converter.pelonis.seneca.center` | Frontend |
+| `api.converter.example.com` | Backend API |
+| `converter.example.com` | Frontend |
 
 ## Updating Environment Variables
 
 Edit the `.env` file on the server and restart the container:
 
 ```bash
-ssh pelonis@pelonis
-nano /home/pelonis/files-converter-api/.env
+ssh deploy@deploy.example.com
+nano /home/deploy/files-converter-api/.env
 docker restart files-converter-api
 ```
